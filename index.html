@@ -1,0 +1,934 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Essential Medical Terminology Caput I-IV icin arcade ogrenme oyunu: dogru Latince formu tasiyan patojeni vur.">
+<meta name="theme-color" content="#140a0e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Leukocytus">
+<title>Leukocytus</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&family=Cinzel:wght@600;800&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: one full-screen canvas "blood vessel"; HUD and question strip float on top; menus are H&E-stained slide cards. Single dark look by choice. */
+:root{
+  --plasma:#140a0e; --plasma-2:#211018; --plasma-3:#301723;
+  --cyto:#f5ece7; --muted:#bca3ad;
+  --eosin:#ff7aa2; --hema:#8d7dff;
+  --bile:#a8e46f; --lysis:#ff5d52; --gold:#ffd27a;
+  --line:rgba(245,236,231,.14);
+  --f-display:'Cinzel', 'Trajan Pro', Georgia, serif;
+  --f-body:'Atkinson Hyperlegible', 'Segoe UI', system-ui, sans-serif;
+  --f-mono:'JetBrains Mono', ui-monospace, Consolas, monospace;
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%;overscroll-behavior:none}
+body{background:var(--plasma);color:var(--cyto);font-family:var(--f-body);font-size:16px;line-height:1.45;overflow:hidden;-webkit-tap-highlight-color:transparent}
+#app{position:fixed;inset:0;overflow:hidden;user-select:none;-webkit-user-select:none}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+#probe{position:absolute;left:0;bottom:0;width:1px;height:env(safe-area-inset-bottom,0px);pointer-events:none}
+.la{font-style:italic}
+button{font:inherit;color:inherit;touch-action:manipulation}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+/* HUD */
+#hud{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;gap:14px;
+  padding:calc(10px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 6px max(16px,env(safe-area-inset-left,0px));
+  font:500 13px/1 var(--f-mono);pointer-events:none;font-variant-numeric:tabular-nums}
+#hud .tag{font-family:var(--f-display);font-weight:800;letter-spacing:.12em;color:var(--eosin);font-size:13px}
+#hearts{letter-spacing:2px;color:var(--eosin);font-size:15px}
+#hearts .off{color:rgba(245,236,231,.2)}
+#hud .sp{flex:1}
+#hudStreak{color:var(--gold)}
+#hudScore{min-width:5ch;text-align:right;font-weight:700}
+#btnPause{pointer-events:auto;width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:rgba(33,16,24,.8);cursor:pointer;font:700 12px var(--f-mono)}
+
+#qbar{position:absolute;top:calc(50px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);
+  width:min(720px,calc(100% - 32px));text-align:center;background:rgba(20,10,14,.86);border:1px solid var(--line);
+  border-radius:14px;padding:10px 16px 10px;pointer-events:none;backdrop-filter:blur(4px)}
+#qmeta{display:flex;justify-content:space-between;gap:8px;font:700 11px/1 var(--f-mono);letter-spacing:.14em;text-transform:uppercase}
+#qtype{color:var(--eosin)}
+#qprog{color:var(--muted)}
+#qtext{font-size:clamp(17px,2.4vw,23px);font-weight:700;margin-top:7px;text-wrap:balance}
+#qtext mark{background:none;color:var(--gold);text-decoration:underline 2px;text-underline-offset:4px}
+#qtext small{display:block;font-size:13px;font-weight:400;color:var(--muted);margin-top:2px}
+#timer{height:3px;background:var(--line);margin-top:9px;border-radius:2px;overflow:hidden}
+#timerFill{display:block;height:100%;width:100%;background:var(--eosin);transform-origin:left center}
+
+#bossbar{position:absolute;left:50%;transform:translateX(-50%);width:min(420px,calc(100% - 32px));pointer-events:none;
+  font:800 12px/1 var(--f-display);letter-spacing:.16em;color:var(--lysis);text-align:center}
+#bossbar .bar{height:6px;margin-top:6px;border-radius:3px;background:rgba(255,93,82,.18);overflow:hidden}
+#bossFill{display:block;height:100%;background:var(--lysis);transition:width .3s}
+
+#toast{position:absolute;left:50%;bottom:calc(110px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);
+  max-width:calc(100% - 32px);background:rgba(20,10,14,.9);border:1px solid rgba(168,228,111,.4);color:var(--cyto);
+  padding:8px 14px;border-radius:10px;font-size:14px;pointer-events:none;text-align:center}
+#toast b{color:var(--bile)}
+
+/* Overlays */
+.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  padding:calc(16px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));
+  background:rgba(12,5,8,.66);backdrop-filter:blur(3px);user-select:text;-webkit-user-select:text}
+.slide{width:min(660px,100%);max-height:100%;overflow-y:auto;background:var(--plasma-2);border:1px solid var(--line);
+  border-radius:16px;padding:22px;box-shadow:0 24px 70px rgba(0,0,0,.55);display:flex;flex-direction:column;gap:14px}
+.slidelabel{display:flex;justify-content:space-between;gap:8px;font:500 11px/1 var(--f-mono);letter-spacing:.14em;color:var(--muted);
+  border-bottom:1px dashed var(--line);padding-bottom:10px}
+.logo{font:800 clamp(34px,7vw,56px)/1 var(--f-display);letter-spacing:.06em;margin:4px 0 0;
+  background:linear-gradient(100deg,var(--cyto) 0%,var(--eosin) 55%,var(--hema) 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.entry{margin:0;color:var(--muted);max-width:60ch}
+.entry i{color:var(--cyto)}
+h2{font:800 22px/1.15 var(--f-display);letter-spacing:.04em;margin:0;text-wrap:balance}
+.eyebrow{margin:0;font:700 11px/1 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--eosin)}
+.eyebrow.bad{color:var(--lysis)}
+.eyebrow.good{color:var(--bile)}
+.chapters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media (max-width:460px){.chapters{grid-template-columns:1fr}}
+.chap{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto auto;column-gap:12px;row-gap:2px;text-align:left;
+  background:var(--plasma-3);border:1px solid var(--line);border-radius:12px;padding:12px 14px;cursor:pointer;min-width:0}
+.chap:hover{border-color:var(--eosin)}
+.chap .num{grid-row:1 / span 3;font:800 26px/1 var(--f-display);color:var(--eosin);align-self:center;min-width:1.6em;text-align:center}
+.chap .t{font:800 14px/1.2 var(--f-display);letter-spacing:.08em}
+.chap .d{font-size:13px;color:var(--muted)}
+.chap .b{font:500 11px/1.4 var(--f-mono);color:var(--gold)}
+.chap.exam{grid-column:1 / -1;background:linear-gradient(100deg,var(--plasma-3),rgba(141,125,255,.18))}
+.chap.exam .num{color:var(--hema)}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+.btn{font:700 15px/1.2 var(--f-body);padding:11px 16px;min-height:44px;border-radius:10px;background:var(--plasma-3);border:1px solid var(--line);cursor:pointer}
+.btn:hover{border-color:var(--cyto)}
+.btn.primary{background:var(--eosin);border-color:var(--eosin);color:#2a0a14}
+.btn.ghost{background:transparent}
+.btn:disabled{opacity:.4;cursor:default}
+.help{margin:0;font-size:13px;color:var(--muted)}
+.help kbd{font:500 11px var(--f-mono);border:1px solid var(--line);border-radius:4px;padding:1px 5px;color:var(--cyto)}
+
+.rulebody{display:flex;flex-direction:column;gap:12px;font-size:15px}
+.rulebody p{margin:0;max-width:62ch}
+.tw{overflow-x:auto}
+.tbl{border-collapse:collapse;font-size:14px;width:100%}
+.tbl th,.tbl td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+.tbl th{font:700 11px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.tbl td.c{font:500 12px var(--f-mono);color:var(--muted);white-space:nowrap}
+.tbl em{font-style:normal;color:var(--eosin);font-weight:700}
+.tbl .la{color:var(--cyto)}
+.tbl mark{background:none;color:var(--gold);font-weight:700}
+
+.fbq{font-size:17px;font-weight:700}
+.fbq small{display:block;font-weight:400;color:var(--muted);font-size:13px}
+.fbrow{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.fbrow .lbl{font:700 11px var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);min-width:9em}
+.ans{font-size:22px;font-weight:700;color:var(--bile)}
+.you{font-size:17px;color:var(--lysis);text-decoration:line-through}
+.exp{background:var(--plasma);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:15px}
+.exp mark{background:none;color:var(--gold);font-weight:700}
+.exp .mini{font:500 13px/1.6 var(--f-mono);color:var(--muted);margin-top:6px}
+.exp .mini b{color:var(--gold)}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+.stat{background:var(--plasma-3);border-radius:10px;padding:10px 12px}
+.stat span{display:block;font:700 11px var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.stat b{font:700 22px var(--f-mono);font-variant-numeric:tabular-nums}
+.stars{font-size:26px;letter-spacing:4px;color:var(--gold)}
+.misslist{display:flex;flex-direction:column;gap:6px;max-height:34vh;overflow-y:auto}
+.miss{display:grid;grid-template-columns:1fr auto;gap:10px;font-size:14px;border-bottom:1px solid var(--line);padding-bottom:6px}
+.miss .a{color:var(--bile);font-weight:700;text-align:right}
+
+.codexhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+.tab{font:800 12px var(--f-display);letter-spacing:.1em;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:transparent;cursor:pointer}
+.tab[aria-selected="true"]{background:var(--eosin);color:#2a0a14;border-color:var(--eosin)}
+.codexbody{display:flex;flex-direction:column;gap:18px}
+.codexbody h3{font:800 15px var(--f-display);letter-spacing:.08em;margin:0 0 6px;color:var(--eosin)}
+.lex{columns:2 220px;column-gap:24px;font-size:14px}
+.lex div{break-inside:avoid;padding:3px 0;border-bottom:1px solid var(--line)}
+.lex .la{font-weight:700}
+.lex span:last-child{color:var(--muted)}
+/* Touch vs keyboard hints */
+.touch-only{display:none}
+@media (pointer:coarse){.kbd-only{display:none}span.touch-only{display:inline}p.touch-only{display:block}}
+
+/* Phone held sideways: the vessel is too short to play */
+#rotate{display:none}
+@media (orientation:landscape) and (max-height:480px) and (pointer:coarse){
+  #rotate{display:flex;position:absolute;inset:0;z-index:50;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;
+    background:var(--plasma);color:var(--cyto);font:700 18px var(--f-body);
+    padding:24px max(24px,env(safe-area-inset-right,0px)) 24px max(24px,env(safe-area-inset-left,0px))}
+  #rotate span{font:500 13px var(--f-mono);color:var(--muted)}
+}
+
+/* Phone widths */
+@media (max-width:600px){
+  #hud{gap:10px;font-size:12px;padding-top:calc(8px + env(safe-area-inset-top,0px))}
+  #hud .tag{font-size:12px}
+  #btnPause{width:40px;height:40px}
+  #qbar{top:calc(54px + env(safe-area-inset-top,0px));padding:8px 12px;border-radius:12px}
+  #qtext{font-size:17px;margin-top:5px}
+  #qtext small{font-size:12px}
+  #toast{bottom:calc(96px + env(safe-area-inset-bottom,0px));font-size:13px}
+  .slide{padding:16px;gap:12px;border-radius:14px}
+  .logo{font-size:38px}
+  .chap{padding:10px 12px}
+  .chap .num{font-size:22px}
+  .row .btn{flex:1 1 auto}
+  .ans{font-size:19px}
+  .fbrow{gap:4px 12px}
+  .fbrow .lbl{min-width:0;width:100%}
+  .rulebody{font-size:14px}
+  .tbl{font-size:13px}
+  .tbl th,.tbl td{padding:5px 6px}
+}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+<style>body{margin:0}</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="cv" aria-label="Oyun alanı: kan damarı"></canvas>
+  <div id="probe"></div>
+  <div id="rotate" role="status">Telefonu dik tut<span>Leukocytus dikey ekranda oynanıyor</span></div>
+
+  <header id="hud" hidden>
+    <span class="tag" id="hudCh">CAPUT I</span>
+    <span id="hearts" aria-label="Can"></span>
+    <span class="sp"></span>
+    <span id="hudStreak">seri 0</span>
+    <span id="hudScore">0</span>
+    <button id="btnPause" aria-label="Duraklat">II</button>
+  </header>
+
+  <div id="qbar" hidden>
+    <div id="qmeta"><span id="qtype"></span><span id="qprog"></span></div>
+    <div id="qtext"></div>
+    <div id="timer"><i id="timerFill"></i></div>
+  </div>
+
+  <div id="bossbar" hidden><span id="bossName"></span><div class="bar"><i id="bossFill"></i></div></div>
+  <div id="toast" hidden></div>
+
+  <section id="menu" class="overlay">
+    <div class="slide">
+      <div class="slidelabel"><span>SPECIMEN 171 · LF3</span><span>H&amp;E · ×400</span></div>
+      <h1 class="logo">Leukocytus</h1>
+      <p class="entry"><i>leukocytus, i, m.</i> — akyuvar. Damarda devriye geziyorsun. Her patojen bir cevap taşıyor: doğru Latince formu taşıyanı vur, yanlışları bırak. Doğru patojen aşağı ulaşırsa enfeksiyon kaparsın.</p>
+      <div class="chapters" id="chapters"></div>
+      <div class="row">
+        <button class="btn" id="btnMistakes">Hatalarım (0)</button>
+        <button class="btn" id="btnCodex">Codex: kurallar ve sözlük</button>
+        <button class="btn ghost" id="btnSound">Ses: açık</button>
+      </div>
+      <p class="help kbd-only"><kbd>Fare</kbd> hareket, tık = yukarı ateş, patojene tık = güdümlü atış · <kbd>←</kbd><kbd>→</kbd>/<kbd>A</kbd><kbd>D</kbd> hareket, <kbd>Space</kbd> ateş · <kbd>1</kbd>–<kbd>4</kbd> o patojene güdümlü atış · <kbd>P</kbd> duraklat</p>
+      <p class="help touch-only">Patojene dokun: güdümlü atış. Boş bir yere dokunup sürükle: hücreyi hareket ettir, boss sporlarından böyle kaçarsın. Sağ üstteki II: duraklat.</p>
+    </div>
+  </section>
+
+  <section id="rule" class="overlay" hidden>
+    <div class="slide">
+      <p class="eyebrow">Yeni kural</p>
+      <h2 id="ruleTitle"></h2>
+      <div id="ruleBody" class="rulebody"></div>
+      <div class="row"><button class="btn primary" id="ruleGo">Anladım, başla<span class="kbd-only"> (Space)</span></button></div>
+    </div>
+  </section>
+
+  <section id="fb" class="overlay" hidden>
+    <div class="slide">
+      <p class="eyebrow bad" id="fbHead">Yanlış patojen</p>
+      <div id="fbQ" class="fbq"></div>
+      <div class="fbrow"><span class="lbl">Doğrusu</span><span id="fbAns" class="ans la"></span></div>
+      <div class="fbrow" id="fbYouRow"><span class="lbl">Senin vurduğun</span><span id="fbYou" class="you la"></span></div>
+      <div id="fbExp" class="exp"></div>
+      <div class="row"><button class="btn primary" id="fbGo">Devam<span class="kbd-only"> (Space)</span></button></div>
+    </div>
+  </section>
+
+  <section id="pause" class="overlay" hidden>
+    <div class="slide">
+      <p class="eyebrow">Pausa</p>
+      <h2>Oyun duraklatıldı</h2>
+      <div class="row">
+        <button class="btn primary" id="pResume">Devam et</button>
+        <button class="btn" id="pCodex">Codex</button>
+        <button class="btn ghost" id="pMenu">Ana menü</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="end" class="overlay" hidden>
+    <div class="slide">
+      <p class="eyebrow" id="endEye"></p>
+      <h2 id="endTitle"></h2>
+      <div class="stars" id="endStars"></div>
+      <div class="stats">
+        <div class="stat"><span>Skor</span><b id="stScore">0</b></div>
+        <div class="stat"><span>İsabet</span><b id="stAcc">0%</b></div>
+        <div class="stat"><span>En iyi</span><b id="stBest">0</b></div>
+      </div>
+      <div id="endMissWrap">
+        <p class="eyebrow bad" style="margin-bottom:8px">Bu turda kaçırdıkların</p>
+        <div class="misslist" id="endMiss"></div>
+      </div>
+      <div class="row">
+        <button class="btn primary" id="eAgain">Tekrar oyna</button>
+        <button class="btn" id="eMist">Hatalarımı çalış</button>
+        <button class="btn ghost" id="eMenu">Ana menü</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="codex" class="overlay" hidden>
+    <div class="slide" style="width:min(820px,100%)">
+      <div class="codexhead">
+        <div class="tabs" id="codexTabs" role="tablist"></div>
+        <button class="btn ghost" id="codexClose">Kapat</button>
+      </div>
+      <div class="codexbody" id="codexBody"></div>
+    </div>
+  </section>
+</div>
+
+<script>
+'use strict';
+/* ===================== DATA (Essential Medical Terminology, chapters 1–4) ===================== */
+
+// Chapter 1 — pronunciation. [x] marks the letters asked about.
+const PRON=[
+ {seg:'c',a:'[ts]',o:['[ts]','[k]','[s]','[č]'],rule:'<b>c</b> → [ts] when followed by <b>e, i, y, ae, oe</b>.',w:['[c]erebrum','[c]ibus','[C]aesar','[c]ystis','[c]ervix','fa[c]ies','suspi[c]io','insuffi[c]ientia']},
+ {seg:'c',a:'[k]',o:['[k]','[ts]','[s]','[č]'],rule:'<b>c</b> → [k] before <b>a, o, u</b>, before a consonant and at the end of a word.',w:['[c]avum','[c]orpus','[c]lavicula','o[c]ulus','la[c]','[c]ranium','[c]ollum','[c]utis','[c]uprum']},
+ {seg:'cc',a:'[kts]',o:['[kts]','[kk]','[ts]','[k]'],rule:'<b>cc</b> before e, i, y → [kts]: first c = k, second c = ts.',w:['co[cc]ygeus','o[cc]ipitalis','a[cc]essorius']},
+ {seg:'s',a:'[z]',o:['[z]','[s]','[ş]','[ts]'],rule:'<b>s</b> between two vowels → [z].',w:['na[s]us','veno[s]us','contu[s]io','ba[s]is','inci[s]ura','muco[s]a']},
+ {seg:'s',a:'[s]',o:['[s]','[z]','[ş]','[ts]'],rule:'<b>s</b> next to a consonant stays [s]; only s between two vowels becomes [z].',w:['pul[s]us','men[s]is','tar[s]us','[s]anguis','mor[s]us']},
+ {seg:'ss',a:'[s]',o:['[s]','[z]','[ss]','[ş]'],rule:'<b>ss</b> → a single [s], never [z].',w:['tu[ss]is','acce[ss]orius','pertu[ss]is','proce[ss]us','hypoglo[ss]us']},
+ {seg:'ti',a:'[tsi]',o:['[tsi]','[ti]','[şi]','[si]'],rule:'<b>ti</b> + vowel → [tsi].',w:['opera[ti]o','resisten[ti]a','transplanta[ti]o','substan[ti]a','spa[ti]um','sana[ti]o']},
+ {seg:'ti',a:'[ti]',o:['[ti]','[tsi]','[şi]','[si]'],rule:'<b>ti</b> stays [ti] after <b>s, t, x</b> and in Greek words, even before a vowel.',w:['tes[ti]um','os[ti]um','mix[ti]o','periodon[ti]um']},
+ {seg:'qu',a:'[kv]',o:['[kv]','[ku]','[kw]','[k]'],rule:'<b>qu</b> → [kv].',w:['a[qu]a','[qu]attuor','[qu]inque','[qu]adratus','[qu]intus','ae[qu]ales']},
+ {seg:'ngu',a:'[ngv]',o:['[ngv]','[ngu]','[ng]','[nk]'],rule:'<b>ngu</b> + vowel → [ngv].',w:['li[ngu]a','sa[ngu]is','u[ngu]is','i[ngu]inalis','subli[ngu]alis']},
+ {seg:'ngu',a:'[ngu]',o:['[ngu]','[ngv]','[ng]','[nk]'],rule:'<b>ngu</b> before a consonant is read as written: an-gu-lus.',w:['a[ngu]lus']},
+ {seg:'th',a:'[t]',o:['[t]','[θ]','[th]','[ts]'],rule:'<b>th</b> → [t].',w:['[th]ymus','[th]erapia','[th]orax','hypo[th]alamus','ar[th]ritis']},
+ {seg:'ph',a:'[f]',o:['[f]','[p]','[ph]','[v]'],rule:'<b>ph</b> → [f].',w:['[ph]ysiologia','a[ph]asia','dia[ph]ragma','claustro[ph]obia']},
+ {seg:'rh',a:'[r]',o:['[r]','[rh]','[h]','[rr]'],rule:'<b>rh</b> → [r].',w:['haemor[rh]agia','[rh]initis','diar[rh]oē']},
+ {seg:'ae/oe',a:'[ē]',o:['[ē]','[a-e]','[ai]','[oi]'],rule:'Diphthongs <b>ae</b> and <b>oe</b> → long [ē].',w:['pr[ae]maturus','[ae]grotus','an[ae]mia','cost[ae]','[oe]sophagus','lag[oe]na','[oe]dema','c[ae]cum']},
+ {seg:'oē',a:'[o-e]',o:['[o-e]','[ē]','[oi]','[ö]'],rule:'<b>oē</b> (macron on e) is NOT a diphthong: o and e are read separately.',w:['eupn[oē]','dyspn[oē]','diarrh[oē]','dipl[oē]']},
+ {seg:'au/eu',a:'one syllable',o:['one syllable','two syllables'],rule:'<b>au</b> and <b>eu</b> are diphthongs: one syllable (au-ris, pleu-ra).',w:['[au]ris','c[au]dalis','pl[eu]ra','n[eu]rologia','pn[eu]monia']},
+ {seg:'e-u',a:'two syllables',o:['two syllables','one syllable'],rule:'In endings like <b>-eus, -eum</b> the e and u belong to different syllables: fel-le-us, bal-ne-um.',w:['baln[eu]m','fell[eu]s','coccyg[eu]s','styloid[eu]s']},
+ {seg:'j',a:'[y]',o:['[y]','[c]','[ʒ]','[dʒ]'],rule:'<b>j</b> → [y] as in “yes”.',w:['[j]unctura','[j]ugularis','ma[j]or','[j]e[j]unum']},
+ {seg:'y',a:'[i]',o:['[i]','[ü]','[y]','[ai]'],rule:'<b>y</b> (Greek upsilon) → [i].',w:['k[y]netosis','z[y]gomaticus','th[y]mus','c[y]stis']},
+ {seg:'x',a:'[ks]',o:['[ks]','[ts]','[gz]','[h]'],rule:'<b>x</b> → [ks].',w:['cervi[x]','thora[x]','mi[x]tio']}
+];
+
+// Chapter 1 — grammatical categories & dictionary use. [prompt, answer, distractors, explanation]
+const GRAM=[
+ ['Latincede kaç dilbilgisel cinsiyet (genus) var?','3: m., f., n.',['2: m., f.','4: m., f., n., c.','Cinsiyet yok'],'masculinum (m.), femininum (f.), neutrum (n.).'],
+ ['Sözlükte <span class="la">vena, ae, <b>f.</b></span> — f. ne demek?','femininum',['masculinum','neutrum','pluralis'],'f. = femininum (dişil).'],
+ ['Sözlükte <span class="la">ligamentum, i, <b>n.</b></span> — n. ne demek?','neutrum',['nominativus','masculinum','numerus'],'n. = neutrum (nötr).'],
+ ['Sözlük formunun 2. parçası (<span class="la">costa, <b>ae</b>, f.</span>) neyi verir?','Gen. sg. ekini',['Nom. pl. ekini','Acc. sg. ekini','Abl. sg. ekini'],'Sözlük formu: Nom. sg. + Gen. sg. eki + cinsiyet.'],
+ ['Bir ismin hangi çekime (declinatio) girdiğini ne belirler?','Gen. sg. eki',['Nom. sg. eki','Cinsiyeti','Hece sayısı'],'Gen. sg. <b>-ae</b> → 1. çekim, <b>-i</b> → 2. çekim.'],
+ ['Gen. sg. eki <b>-ae</b> olan isim hangi çekimdedir?','1. çekim',['2. çekim','3. çekim','4. çekim'],'costa, <mark>ae</mark>, f. → 1. çekim.'],
+ ['Gen. sg. eki <b>-i</b> olan isim hangi çekimdedir?','2. çekim',['1. çekim','3. çekim','5. çekim'],'musculus, <mark>i</mark>, m. → 2. çekim.'],
+ ['<b>Nominativus</b> ne iş görür?','Özne / sözlük formu',['Aitlik: “of”','Nesne, Acc. edatlarından sonra','Abl. edatlarından sonra'],'Nom. = kim? ne? Sözlükteki ilk form.'],
+ ['<b>Genitivus</b> neyi ifade eder?','Aitlik: “of”',['Özne','Nesne','“with / without”'],'fractura costae = fracture <b>of the</b> rib.'],
+ ['<b>Accusativus</b> nerede kullanılır?','ad, per, inter, trans… sonrası',['cum, sine, e/ex sonrası','Özne olarak','Aitlik için'],'Acc. = doğrudan nesne + ad, ante, infra, inter, per, post, propter, supra, trans.'],
+ ['<b>Ablativus</b> nerede kullanılır?','cum, sine, e/ex, a/ab, sub… sonrası',['ad, per, inter sonrası','Özne olarak','Aitlik için'],'Abl. = a/ab, cum, e/ex, pro, sine, sub, in (yer).'],
+ ['Tekil ve çoğulun Latince adı?','singularis / pluralis',['nominativus / genitivus','masculinum / femininum','primus / secundus'],'sg. = singularis, pl. = pluralis.'],
+ ['Tıbbi terimde sıfat nereye gelir? (straight muscle)','İsimden sonra: musculus rectus',['İsimden önce: rectus musculus','Ortaya: musculus et rectus','Fark etmez'],'Latince tıbbi terimde sıra: <b>isim + sıfat</b>.'],
+ ['Genitiv tamlayan nereye gelir? (fracture of the rib)','fractura costae',['costae fractura','fractura costa','fractura costam'],'Sıra: <b>ana isim + Gen. tamlayan</b>.'],
+ ['Bu derste kullanılan 4 temel hâl (casus)?','Nom., Gen., Acc., Abl.',['Nom., Dat., Voc., Loc.','Gen., Dat., Acc., Voc.','Nom., Gen., Dat., Abl.'],'Nominativus, Genitivus, Accusativus, Ablativus.'],
+ ['Sıfat, nitelediği isimle hangi 3 kategoride uyuşur?','cinsiyet, sayı, hâl',['çekim, hece, vurgu','sadece cinsiyet','sadece hâl'],'vena profund<mark>a</mark>, venae profund<mark>ae</mark>, venarum profund<mark>arum</mark>.']
+];
+
+// Chapter 2 — 1st declension nouns (-a, -ae, f.)
+const N1S='angina|tonsillitis, angina;aorta|aorta (largest artery);apertura|opening, aperture;areola|small area (areola mammae);arteria|artery;arteriola|small artery;aqua|water;bucca|cheek;causa|cause, reason;clavicula|collar bone, clavicle;columna|column;commissura|commissure (junction of two parts);conjunctiva|conjunctiva;costa|rib;coxa|hip bone;crista|ridge, crest;curvatura|curvature;fascia|sheet of connective tissue;fibula|fibula (calf bone);fissura|fissure, cleft;fossa|pit, fossa;fractura|fracture;glandula|gland;gravida|pregnant woman;hernia|hernia;incisura|notch;insufficientia|insufficiency;junctura|junction, joint;lingua|tongue;mamma|breast, mammary gland;mandibula|lower jaw, mandible;maxilla|upper jaw, maxilla;medulla|marrow;membrana|membrane;nausea|nausea;orbita|orbit (eye socket);palpebra|eyelid;papilla|nipple, papilla;pleura|pleura;patella|kneecap;pneumonia|pneumonia;porta|gate (entrance to an organ);prostata|prostate;rima|cleft, crack;scapula|shoulder blade;sclera|sclera (white of the eye);spina|spine (sharp bony process);substantia|substance;sutura|suture, stitch;tela|tissue;tibia|shinbone, tibia;tinctura|tincture;tonsilla|tonsil;trachea|windpipe, trachea;tuba|tube;tunica|coat, layer;ulna|ulna;uvula|uvula;urina|urine;vagina|vagina;valvula|valve;vena|vein;vertebra|vertebra;vesica|bladder;vita|life';
+const P1S='columna vertebrarum|spine, vertebral column;rima palpebrarum|palpebral fissure;tuba uterina|Fallopian tube;tunica mucosa|mucous membrane;vena portae|portal vein;vesica urinaria|urinary bladder;vesica fellea|gall bladder;medulla oblongata|medulla oblongata (lower brainstem)';
+const A2S='primus|first;secundus|second;tertius|third;quartus|fourth;quintus|fifth;sextus|sixth;septimus|seventh;octavus|eighth;nonus|ninth;decimus|tenth;undecimus|eleventh;duodecimus|twelfth;anteoperativus|preoperative;complicatus|complicated;dexter/dextr|right;felleus|relating to gall;hepaticus|relating to the liver;magnus|big;nutricius|nutrient;postoperativus|postoperative;profundus|deep;thoracicus|thoracic;urinarius|relating to urine';
+const PREP=[['ad','A','to, towards'],['ante','A','before, in front of'],['infra','A','below'],['inter','A','between'],['per','A','through'],['post','A','after, behind'],['propter','A','because of'],['supra','A','above'],['trans','A','across, beyond'],['a/ab','B','away from'],['cum','B','with'],['e/ex','B','out of'],['pro','B','for, on behalf of'],['sine','B','without'],['sub','B','under'],['in','B','in, at (location)']];
+// [preposition, noun, number, English] — case comes from the preposition
+const PREPPH=[['sub','lingua','s','under the tongue'],['inter','costa','p','between the ribs'],['supra','clavicula','s','above the clavicle'],['infra','clavicula','s','below the clavicle'],['per','vena','s','through the vein'],['post','fractura','s','after the fracture'],['cum','aqua','s','with water'],['sine','aqua','s','without water'],['e','vena','s','out of the vein'],['ad','vesica','s','to the bladder'],['trans','membrana','s','across the membrane'],['propter','pneumonia','s','because of pneumonia'],['propter','nausea','s','because of nausea'],['in','vena','s','in the vein'],['in','vertebra','p','in the vertebrae'],['sub','scapula','s','under the shoulder blade'],['inter','vertebra','p','between the vertebrae'],['ad','glandula','p','to the glands'],['pro','vita','s','for life'],
+ ['sub','musculus','s','under the muscle'],['inter','digitus','p','between the fingers'],['in','ventriculus','s','in the ventricle'],['post','cibus','s','after a meal'],['ante','cibus','s','before a meal'],['cum','oleum','s','with oil'],['sine','periculum','s','without danger'],['supra','sternum','s','above the sternum'],['in','cavum','s','in the cavity'],['propter','morbus','s','because of the disease'],['inter','ligamentum','p','between the ligaments'],['in','intestinum','s','in the intestine'],['per','nervus','s','through the nerve']];
+
+// Chapter 3 — 2nd declension. "la/stem/gen" for -er nouns, "!f" = feminine exception
+const N2S='angulus|angle;annus|year;bronchus|bronchus;bulbus|bulb;calcaneus|heel bone;cancer/cancr/cri|cancer;carpus|wrist;cibus|meal;condylus|condyle;cubitus|elbow;digitus|finger, toe;ductulus|small duct;epicondylus|epicondyle;fundus|fundus, base of an organ;humerus|humerus (upper arm bone);icterus|jaundice;ileus|intestinal obstruction;isthmus|short narrow passage;lobus|lobe;locus|place;magister/magistr/tri|teacher;malleolus|ankle (malleolus);medicus|medical doctor;metacarpus|metacarpus;metatarsus|instep, metatarsus;morbus|disease, illness;murus|wall;musculus|muscle;nasus|nose;neonatus|newborn (boy);nervus|nerve;nodus|node;nucleus|nucleus;oculus|eye;oesophagus|gullet, oesophagus;radius|radius (forearm bone);ramus|branch;spasmus|spasm;sulcus|furrow, sulcus;talus|talus (ankle bone);tarsus|tarsus (ankle bones);thymus|thymus;truncus|trunk;uterus|uterus, womb;ventriculus|ventricle;diameter/diametr/tri!f|diameter;methodus!f|method;periodus!f|period, time interval;acidum|acid;alimentum|food, nourishment;antebrachium|forearm;atrium|atrium (upper heart chamber);brachium|arm;caecum|caecum (blind gut);capitulum|small head;cavum|cavity;cranium|skull;cerebellum|cerebellum (small brain);cerebrum|brain;collum|neck;dorsum|back;duodenum|duodenum;endocardium|heart lining, endocardium;endometrium|uterine lining, endometrium;exemplum|example;extractum|extract;jejunum|jejunum (hungry gut);intestinum|intestine, bowel;labium|lip;ligamentum|ligament;manubrium|handle;medicamentum|medicament;membrum|limb, extremity;myocardium|myocardium;oleum|oil;organum|organ;ostium|orifice, opening;ovarium|ovary;ovum|egg;palatum|palate;pericardium|pericardium;periculum|danger;remedium|remedy;rectum|rectum (upright gut);septum|septum, thin partition;signum|sign, symptom;segmentum|segment;spatium|space;sternum|breastbone;suppositorium|suppository;tuberculum|tubercle;unguentum|ointment;venenum|poison;vestibulum|vestibule;vitium|defect';
+const P2S='morbilli, orum, m. (pl.)|measles;acidum boricum|boric acid;acidum sulphuricum|sulphuric acid;intestinum crassum|large intestine;neonata, ae, f.|newborn (girl)';
+
+// Chapter 4 — adjectives of the 1st & 2nd declension. "m/stem" for -er adjectives
+const A4S='acquisitus|acquired;acutus|acute;aegrotus|ill, sick;anatomicus|anatomical;apertus|open;arteriosus|concerning arteries;benignus|benign;bonus|good;caecus|blind;cavus|hollow;chirurgicus|surgical;chronicus|chronic;circulatorius|circulatory;clausus|closed;coccygeus|coccygeal;compactus|compact;complicatus|complicated;compositus|composed;congenitus|congenital;crassus|thick, large;dexter/dextr|right;digestorius|digestive;durus|hard;externus|external;felleus|relating to gall;glutaeus|gluteal (of the buttock);humidus|humid, wet;infectiosus|infectious;internus|internal;interosseus|interosseous;ischaemicus|ischaemic;lactifer/lactifer|lactiferous (conveying milk);laesus|wounded, hurt;latus|broad, wide;longus|long;medius|middle;medianus|median (in the medial plane);malignus|malignant;malus|bad;maximus|largest, maximal;minimus|smallest, minimal;mucosus|mucous;nutricius|nutrient;obliquus|oblique;oblongatus|oblong;oculomotorius|oculomotor;opticus|optic;optimus|best, optimal;perforatus|perforated;periculosus|dangerous;pessimus|worst;postoperativus|postoperative;praematurus|premature;profundus|deep;proprius|proper, own;rectus|straight;respiratorius|respiratory;serotinus|late, delayed;siccus|dry;sinister/sinistr|left;spongiosus|spongy;spontaneus|spontaneous;spurius|false, spurious;styloideus|styloid (peg-shaped);suspectus|suspected;thoracicus|thoracic;transversus|transverse;trigeminus|trigeminal, triple;urinarius|relating to urine;urologicus|urological;verus|true;vagus|wandering;valgus|valgus;varus|varus;venosus|concerning veins';
+
+// Noun + adjective(s) phrases: [noun, adj, English, optional 2nd adj, chapter]
+const PHR=[['vena','profundus','deep vein',null,2],['arteria','profundus','deep artery',null,2],['arteria','nutricius','nutrient artery',null,2],['vesica','urinarius','urinary bladder',null,2],['vesica','felleus','gall bladder',null,2],['vena','magnus','great vein',null,2],['costa','primus','first rib',null,2],['costa','duodecimus','twelfth rib',null,2],['vertebra','septimus','seventh vertebra',null,2],['arteria','thoracicus','thoracic artery',null,2],['vena','dexter','right vein',null,2],
+ ['musculus','rectus','straight muscle',null,4],['musculus','obliquus','oblique muscle',null,4],['musculus','transversus','transverse muscle',null,4],['musculus','longus','long muscle',null,4],['vena','cavus','hollow vein (vena cava)',null,4],['fractura','apertus','open fracture',null,4],['fractura','clausus','closed fracture',null,4],['fractura','complicatus','complicated fracture',null,4],['morbus','acutus','acute disease',null,4],['morbus','chronicus','chronic disease',null,4],['morbus','infectiosus','infectious disease',null,4],['vitium','congenitus','congenital defect',null,4],['vitium','acquisitus','acquired defect',null,4],['intestinum','crassus','large intestine',null,4],['ventriculus','sinister','left ventricle',null,4],['ventriculus','dexter','right ventricle',null,4],['atrium','dexter','right atrium',null,4],['atrium','sinister','left atrium',null,4],['substantia','compactus','compact substance',null,4],['substantia','spongiosus','spongy substance',null,4],['tunica','mucosus','mucous membrane',null,4],['organum','internus','internal organ',null,4],['ramus','profundus','deep branch',null,4],['ramus','externus','external branch',null,4],['digitus','medius','middle finger',null,4],['neonatus','praematurus','premature newborn',null,4],['periodus','postoperativus','postoperative period',null,4],['diameter','transversus','transverse diameter',null,4],['diameter','obliquus','oblique diameter',null,4],['methodus','chirurgicus','surgical method',null,4],['ligamentum','latus','broad ligament',null,4],['ligamentum','transversus','transverse ligament',null,4],['nervus','opticus','optic nerve',null,4],['nervus','oculomotorius','oculomotor nerve',null,4],['nervus','trigeminus','trigeminal nerve',null,4],['nervus','vagus','vagus nerve',null,4],['ductulus','lactifer','lactiferous ductule',null,4],['oculus','dexter','right eye',null,4],['oculus','sinister','left eye',null,4],['costa','verus','true rib',null,4],['costa','spurius','false rib',null,4],['membrana','interosseus','interosseous membrane',null,4],['lobus','dexter','right lobe',null,4],['lobus','sinister','left lobe',null,4],['medulla','oblongatus','medulla oblongata',null,4],['periculum','magnus','great danger',null,4],['arteria','thoracicus','internal thoracic artery','internus',4],['vena','thoracicus','internal thoracic vein','internus',4],['musculus','glutaeus','gluteus maximus muscle','maximus',4],['musculus','obliquus','external oblique muscle','externus',4],['cavum','thoracicus','thoracic cavity',null,4],['morbus','congenitus','congenital disease',null,4]];
+
+// Head noun + genitive dependent: [head, dependent, number of dependent, English, chapter]
+const GENPH=[['fractura','costa','s','fracture of the rib',2],['fractura','clavicula','s','fracture of the clavicle',2],['fractura','tibia','s','fracture of the tibia',2],['fractura','fibula','s','fracture of the fibula',2],['fractura','ulna','s','fracture of the ulna',2],['fractura','mandibula','s','fracture of the mandible',2],['fractura','scapula','s','fracture of the scapula',2],['fractura','vertebra','s','fracture of the vertebra',2],['fractura','patella','s','fracture of the kneecap',2],['vena','porta','s','portal vein (vein of the gate)',2],['columna','vertebra','p','vertebral column (column of vertebrae)',2],['rima','palpebra','p','palpebral fissure (cleft of the eyelids)',2],['papilla','lingua','s','papilla of the tongue',2],['insufficientia','valvula','s','insufficiency of the valve',2],['incisura','scapula','s','notch of the scapula',2],['spina','scapula','s','spine of the scapula',2],['fractura','costa','p','fracture of the ribs',2],['fractura','vertebra','p','fracture of the vertebrae',2],
+ ['fractura','humerus','s','fracture of the humerus',3],['fractura','radius','s','fracture of the radius',3],['fractura','sternum','s','fracture of the sternum',3],['fractura','calcaneus','s','fracture of the heel bone',3],['collum','humerus','s','neck of the humerus',3],['condylus','humerus','s','condyle of the humerus',3],['capitulum','humerus','s','small head of the humerus',3],['fundus','uterus','s','fundus of the uterus',3],['isthmus','uterus','s','isthmus of the uterus',3],['cavum','cranium','s','cranial cavity',3],['ramus','nervus','s','branch of the nerve',3],['spasmus','oesophagus','s','spasm of the oesophagus',3],['lobus','cerebrum','s','lobe of the brain',3],['septum','nasus','s','nasal septum',3],['dorsum','nasus','s','back of the nose',3],['dorsum','lingua','s','back of the tongue',3],['bulbus','oculus','s','eyeball (bulb of the eye)',3],['fundus','ventriculus','s','fundus of the stomach',3],['ostium','uterus','s','opening of the uterus',3],['manubrium','sternum','s','handle of the sternum',3],['angulus','mandibula','s','angle of the mandible',3],['angulus','costa','s','angle of the rib',3],['tuberculum','costa','s','tubercle of the rib',3],['vestibulum','vagina','s','vestibule of the vagina',3],['fractura','digitus','p','fracture of the fingers',3],['ligamentum','digitus','p','ligament of the fingers',3]];
+
+/* ===================== MORPHOLOGY ===================== */
+const CASES=['Ns','Gs','As','Bs','Np','Gp','Ap','Bp'];   // B = ablative
+const CASE_LBL={Ns:'Nom. sg.',Gs:'Gen. sg.',As:'Acc. sg.',Bs:'Abl. sg.',Np:'Nom. pl.',Gp:'Gen. pl.',Ap:'Acc. pl.',Bp:'Abl. pl.'};
+const END={
+  a:{Ns:'a',Gs:'ae',As:'am',Bs:'a',Np:'ae',Gp:'arum',Ap:'as',Bp:'is'},
+  us:{Ns:'us',Gs:'i',As:'um',Bs:'o',Np:'i',Gp:'orum',Ap:'os',Bp:'is'},
+  um:{Ns:'um',Gs:'i',As:'um',Bs:'o',Np:'a',Gp:'orum',Ap:'a',Bp:'is'}
+};
+const GTR={m:'eril (m.)',f:'dişil (f.)',n:'nötr (n.)'};
+const split=s=>s.split(';').map(x=>x.split('|'));
+
+function mkNoun(raw,en,decl,ch){
+  let l=raw,g=null;
+  if(l.endsWith('!f')){g='f';l=l.slice(0,-2)}
+  const [la,st,gd]=l.split('/');
+  let stem,par,nom=null,gen;
+  if(decl===1){par='a';stem=la.slice(0,-1);g='f';gen='ae'}
+  else if(st){par='us';stem=st;nom=la;g=g||'m';gen=gd}
+  else if(la.endsWith('um')){par='um';stem=la.slice(0,-2);g='n'}
+  else{par='us';stem=la.slice(0,-2);g=g||'m'}
+  if(!gen)gen=stem.endsWith('i')?'ii':'i';
+  return {la,stem,par,nom,g,decl,en,ch,dict:`${la}, ${gen}, ${g}.`};
+}
+const N1=split(N1S).map(([l,e])=>mkNoun(l,e,1,2));
+const N2=split(N2S).map(([l,e])=>mkNoun(l,e,2,3));
+const NOUNS=[...N1,...N2];
+const NB=Object.fromEntries(NOUNS.map(n=>[n.la,n]));
+function forms(n){const f={};for(const c of CASES)f[c]=n.stem+END[n.par][c];if(n.nom)f.Ns=n.nom;return f}
+
+function mkAdj(raw,en,ch){const [m,st]=raw.split('/');const stem=st||m.slice(0,-2);return {la:m,m,stem,en,ch,dict:st?`${m}, ${stem}a, ${stem}um`:`${m}, a, um`}}
+const A2=split(A2S).map(([l,e])=>mkAdj(l,e,2));
+const A4=split(A4S).map(([l,e])=>mkAdj(l,e,4));
+const AB=Object.fromEntries([...A2,...A4].map(a=>[a.la,a]));
+function adjForm(a,g,c){if(g==='m'&&c==='Ns')return a.m;return a.stem+END[g==='f'?'a':g==='n'?'um':'us'][c]}
+const P1=split(P1S).map(([la,en])=>({la,en,dict:la,ch:2}));
+const P2=split(P2S).map(([la,en])=>({la,en,dict:la,ch:3}));
+// noun case nc, adjective case ac, adjective gender g (wrong values make good distractors)
+function phrX(p,nc,ac,g){const n=NB[p[0]],a=AB[p[1]],a2=p[3]&&AB[p[3]];return [forms(n)[nc],adjForm(a,g,ac),a2&&adjForm(a2,g,ac)].filter(Boolean).join(' ')}
+
+/* ===================== QUESTIONS ===================== */
+const R=Math.random;
+const pick=a=>a[Math.floor(R()*a.length)];
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(R()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+const uniq=a=>[...new Set(a)];
+const LA=s=>`<span class="la">${s}</span>`;
+const MK=s=>s.replace(/\[(.+?)\]/,'<mark>$1</mark>');
+function mkQ(type,prompt,answer,dis,explain,key,rule){
+  const d=shuffle(uniq(dis).filter(x=>x&&x!==answer));
+  return {type,prompt,answer,opts:shuffle([answer,...d.slice(0,3)]),explain,key:key||type+':'+answer,rule:rule||null};
+}
+function para(n,hi){const f=forms(n);const row=ks=>ks.map(c=>c===hi?`<b>${f[c]}</b>`:f[c]).join(' · ');return `<div class="mini">sg: ${row(['Ns','Gs','As','Bs'])}<br>pl: ${row(['Np','Gp','Ap','Bp'])}</div>`}
+// distractors that look alike (same first letter) first, then random
+function near(pool,item,key){const k=key(item);const same=shuffle(pool.filter(x=>x!==item&&key(x)[0]===k[0]));return uniq([...same.slice(0,2),...shuffle(pool.filter(x=>x!==item))].map(key)).filter(x=>x!==k).slice(0,6)}
+const prepOf=w=>PREP.find(x=>x[0].split('/').includes(w));
+
+const GEN={
+  pron(){const r=pick(PRON),w=pick(r.w);return mkQ('pron',`${LA(MK(w))} — işaretli kısım nasıl okunur?`,r.a,r.o,`${LA(MK(w))}: ${r.rule}`,'p:'+w,'pron')},
+  gram(){const g=pick(GRAM);return mkQ('gram',g[0],g[1],g[2],g[3],'g:'+g[1],'gram')},
+  decl(){const n=pick(NOUNS);return mkQ('dict',`${LA(n.dict)} — hangi çekim?`,n.decl+'. çekim',['1. çekim','2. çekim','3. çekim','4. çekim'],`Gen. sg. eki <mark>-${n.decl===1?'ae':'i'}</mark> → ${n.decl}. çekim. Cinsiyet: ${GTR[n.g]}.`,'d:'+n.la,'dict')},
+  gender(){
+    const traps=N2.filter(n=>n.g==='f'||n.nom);
+    const n=R()<.35?pick(traps):pick(N2);
+    const d=n.dict.replace(/[mfn]\.$/,'?');
+    const exp=n.g==='f'?`<b>${n.la}</b> 2. çekimde olsa da <mark>dişil</mark> (Yunanca kökenli istisna). Sıfatı da dişil olur: ${LA(n.la+' '+adjForm(AB.longus,'f','Ns'))}.`:`-us / -er → eril, -um → nötr: ${LA(n.dict)}`;
+    return mkQ('gender',`${LA(d)} — cinsiyeti?`,n.g+'.',['m.','f.','n.'],exp,'gd:'+n.la,'gender');
+  },
+  voc(pool){
+    const it=pick(pool);
+    if(R()<.5)return mkQ('voc',`${LA(it.dict)} — anlamı?`,it.en,near(pool,it,x=>x.en),`${LA(it.dict)} = ${it.en}`,'v:'+it.la);
+    return mkQ('voc',`“${it.en}” — Latincesi?`,it.dict,near(pool,it,x=>x.dict),`${it.en} = ${LA(it.dict)}`,'v:'+it.la);
+  },
+  caseQ(pool){
+    const n=pick(pool),f=forms(n),c=pick(CASES.slice(1)),ans=f[c];
+    const real=uniq(CASES.map(k=>f[k]));
+    const fake=uniq((n.par==='a'?['us','um']:['a']).flatMap(p=>CASES.map(k=>n.stem+END[p][k]))).filter(x=>!real.includes(x));
+    const dis=shuffle(real.filter(x=>x!==ans)).slice(0,2).concat(shuffle(fake).slice(0,2));
+    return mkQ('case',`${LA(n.dict)} → <mark>${CASE_LBL[c]}</mark>?`,ans,dis,`${LA(n.la)}, ${CASE_LBL[c]} = ${LA('<mark>'+ans+'</mark>')}${para(n,c)}`,'c:'+n.la+c,n.decl===1?'d1':'d2');
+  },
+  caseRev(pool){
+    for(let t=0;t<25;t++){
+      const n=pick(pool),f=forms(n),c=pick(CASES);
+      if(CASES.filter(k=>f[k]===f[c]).length>1)continue;   // only unambiguous forms
+      const sameNum=CASES.filter(k=>k!==c&&k[1]===c[1]),other=CASES.filter(k=>k!==c&&k[1]!==c[1]);
+      const dis=[...shuffle(sameNum).slice(0,2),pick(other)].map(k=>CASE_LBL[k]);
+      return mkQ('caseRev',`${LA(f[c])} <small>${n.dict}</small> hangi hâl?`,CASE_LBL[c],dis,`${LA(f[c])} = ${CASE_LBL[c]}${para(n,c)}`,'cr:'+f[c],n.decl===1?'d1':'d2');
+    }
+    return GEN.caseQ(pool);
+  },
+  prepCase(){const p=pick(PREP);return mkQ('prep',`${LA(p[0])} <small>${p[2]}</small> + hangi hâl?`,p[1]==='A'?'Accusativus':'Ablativus',['Accusativus','Ablativus','Genitivus','Nominativus'],`+ Acc.: ${PREP.filter(x=>x[1]==='A').map(x=>x[0]).join(', ')}<br>+ Abl.: ${PREP.filter(x=>x[1]==='B').map(x=>x[0]).join(', ')}`,'pc:'+p[0],'prep')},
+  prepMean(){const p=pick(PREP);return mkQ('prep',`“${p[2]}” — hangi edat?`,p[0],shuffle(PREP.filter(x=>x!==p)).map(x=>x[0]),`${LA(p[0])} = ${p[2]} (+ ${p[1]==='A'?'Acc.':'Abl.'})`,'pm:'+p[0],'prep')},
+  prepPh(maxCh){
+    const [pr,nl,num,en]=pick(PREPPH.filter(x=>NB[x[1]].ch<=maxCh));
+    const n=NB[nl],f=forms(n),k=prepOf(pr)[1],c=k+num,ans=pr+' '+f[c];
+    const dis=['N','G','A','B'].filter(x=>x!==k).map(x=>pr+' '+f[x+num]).concat([pr+' '+f[k+(num==='s'?'p':'s')]]);
+    return mkQ('prepPh',`“${en}” → ${LA(pr)} + ${LA(n.la)} <small>${num==='s'?'tekil':'çoğul'}</small>`,ans,dis,`${LA(pr)} + ${k==='A'?'Accusativus':'Ablativus'} → ${CASE_LBL[c]}: ${LA('<mark>'+ans+'</mark>')}${para(n,c)}`,'pp:'+ans,'prep');
+  },
+  agree(minCh,maxCh){
+    const p=pick(PHR.filter(x=>x[4]>=minCh&&x[4]<=maxCh)),n=NB[p[0]];
+    const ans=phrX(p,'Ns','Ns',n.g);
+    const dis=['m','f','n'].filter(g=>g!==n.g).map(g=>phrX(p,'Ns','Ns',g)).concat([phrX(p,'Ns','Gs',n.g)]);
+    const trap=n.decl===2&&n.g==='f'?` <b>Tuzak:</b> ${LA(n.la)} -us/-er ile bitse de dişil, sıfat <mark>-a</mark> alır.`:'';
+    const adjs=[AB[p[1]],p[3]&&AB[p[3]]].filter(Boolean).map(a=>LA(a.dict)).join(' + ');
+    return mkQ('agree',`${LA(n.dict)} + ${adjs} → Nom. sg.? <small>“${p[2]}”</small>`,ans,dis,`${LA(n.la)} ${GTR[n.g]} → sıfat da ${GTR[n.g]}: ${LA('<mark>'+ans+'</mark>')}.${trap}`,'a:'+ans,'adj');
+  },
+  agreeCase(){
+    const p=pick(PHR.filter(x=>x[4]===4||R()<.3)),n=NB[p[0]],c=pick(CASES.slice(1));
+    const ans=phrX(p,c,c,n.g);
+    const flip=c[0]+(c[1]==='s'?'p':'s');
+    const dis=['m','f','n'].filter(g=>g!==n.g).map(g=>phrX(p,c,c,g)).concat([phrX(p,c,'Ns',n.g),phrX(p,c,flip,n.g),phrX(p,flip,flip,n.g)]);
+    const c2=shuffle(CASES.filter(k=>k!==c)).find(k=>phrX(p,k,k,n.g)!==ans);if(c2)dis.push(phrX(p,c2,c2,n.g));
+    return mkQ('agreeCase',`${LA(phrX(p,'Ns','Ns',n.g))} → <mark>${CASE_LBL[c]}</mark>? <small>“${p[2]}”</small>`,ans,dis,`İsim ve sıfat aynı hâl, sayı ve cinsiyette: ${LA('<mark>'+ans+'</mark>')}${para(n,c)}`,'ac:'+ans,'adj');
+  },
+  genPh(ch){
+    const pool=GENPH.filter(x=>x[4]===ch),p=pick(pool),h=NB[p[0]],d=NB[p[1]],fd=forms(d),gc='G'+p[2],ans=h.la+' '+fd[gc];
+    const exp=`Ana isim önce (Nom.), tamlayan arkadan ve <mark>${CASE_LBL[gc]}</mark>: ${LA(h.la)} + ${LA(d.dict)} → ${LA('<mark>'+ans+'</mark>')}`;
+    if(R()<.35)return mkQ('genLE',`${LA(ans)} — anlamı?`,p[3],shuffle(pool.filter(x=>x!==p)).map(x=>x[3]),exp,'gl:'+ans,'order');
+    const o=p[2]==='s'?'p':'s';
+    const dis=[h.la+' '+fd['N'+p[2]],h.la+' '+fd['A'+p[2]],fd[gc]+' '+h.la,h.la+' '+fd['G'+o],h.la+' '+fd['B'+p[2]]];
+    return mkQ('gen',`“${p[3]}” — Latincesi?`,ans,dis,exp,'ge:'+ans,'order');
+  },
+  phr4(){
+    const p=pick(PHR.filter(x=>x[4]===4)),n=NB[p[0]],ans=phrX(p,'Ns','Ns',n.g);
+    const exp=`Sıra <b>isim + sıfat</b>; sıfat ismin cinsiyetine uyar (${LA(n.dict)}): ${LA('<mark>'+ans+'</mark>')}`;
+    if(R()<.35){const sim=shuffle(PHR.filter(x=>x!==p&&(x[0]===p[0]||x[1]===p[1])));return mkQ('phrLE',`${LA(ans)} — anlamı?`,p[2],sim.concat(shuffle(PHR)).map(x=>x[2]),exp,'pl:'+ans,'adj')}
+    const rev=[p[1],p[3]].filter(Boolean).map(a=>adjForm(AB[a],n.g,'Ns')).concat(forms(n).Ns).join(' ');
+    const dis=['m','f','n'].filter(g=>g!==n.g).map(g=>phrX(p,'Ns','Ns',g)).concat([rev,phrX(p,'Np','Np',n.g)]);
+    return mkQ('phr',`“${p[2]}” — Latincesi?`,ans,dis,exp,'ph:'+ans,'adj');
+  }
+};
+
+const CHAPTERS={
+  1:{n:'I',name:'Caput I',topic:'Telaffuz · gramer kategorileri · sözlük formu',boss:'Haemorrhagia',len:14,mix:[[()=>GEN.pron(),6],[()=>GEN.gram(),3],[()=>GEN.decl(),2]]},
+  2:{n:'II',name:'Caput II',topic:'1. çekim · edatlar · sıfatlar',boss:'Pneumonia',len:16,mix:[[()=>GEN.voc(N1.concat(P1)),4],[()=>GEN.caseQ(N1),3],[()=>GEN.caseRev(N1),1],[()=>R()<.5?GEN.prepCase():GEN.prepMean(),1],[()=>GEN.prepPh(2),2],[()=>GEN.voc(A2),1],[()=>GEN.agree(2,2),1],[()=>GEN.genPh(2),2]]},
+  3:{n:'III',name:'Caput III',topic:'2. çekim: -us, -er, -um',boss:'Icterus',len:16,mix:[[()=>GEN.voc(N2.concat(P2)),4],[()=>GEN.caseQ(N2),3],[()=>GEN.caseRev(N2),1],[()=>GEN.gender(),2],[()=>GEN.genPh(3),2],[()=>GEN.prepPh(3),1]]},
+  4:{n:'IV',name:'Caput IV',topic:'1. ve 2. çekim sıfatları, uyum',boss:'Morbus malignus',len:16,mix:[[()=>GEN.voc(A4),4],[()=>GEN.agree(4,4),3],[()=>GEN.agreeCase(),2],[()=>GEN.phr4(),3]]},
+  5:{n:'∑',name:'Examen',topic:'Karışık sınav provası: Caput I–IV',boss:'Morbus chronicus complicatus',len:24,mix:[]}
+};
+CHAPTERS[5].mix=[1,2,3,4].flatMap(k=>CHAPTERS[k].mix);
+function genFor(ch){const m=CHAPTERS[ch].mix;let t=m.reduce((s,x)=>s+x[1],0)*R();for(const [f,w] of m){if((t-=w)<0)return f()}return m[0][0]()}
+
+/* ===================== RULE CARDS / CODEX ===================== */
+function declTable(ns){
+  const hdr=`<tr><th>Hâl</th>${ns.map(n=>`<th>${NB[n].dict}</th>`).join('')}</tr>`;
+  const rows=CASES.map(c=>`<tr><td class="c">${CASE_LBL[c]}</td>${ns.map(k=>{const n=NB[k],f=forms(n)[c],e=END[n.par][c];return `<td class="la">${c==='Ns'&&n.nom?f:f.slice(0,f.length-e.length)+'<em>'+e+'</em>'}</td>`}).join('')}</tr>`).join('');
+  return `<div class="tw"><table class="tbl">${hdr}${rows}</table></div>`;
+}
+function adjTable(k){
+  const a=AB[k];
+  return `<div class="tw"><table class="tbl"><tr><th>Hâl</th><th>m.</th><th>f.</th><th>n.</th></tr>${CASES.map(c=>`<tr><td class="c">${CASE_LBL[c]}</td>${['m','f','n'].map(g=>{const f=adjForm(a,g,c),e=g==='m'&&c==='Ns'?'':END[g==='f'?'a':g==='n'?'um':'us'][c];return `<td class="la">${f.slice(0,f.length-e.length)}<em>${e}</em></td>`}).join('')}</tr>`).join('')}</table></div>`;
+}
+const RULES={
+  pron:{t:'Telaffuz kuralları',h:()=>`<p>Altı çizili harf(ler)in nasıl okunduğunu taşıyan patojeni vur.</p><div class="tw"><table class="tbl"><tr><th>Harf</th><th>Okunuş</th><th>Kural</th><th>Örnek</th></tr>${PRON.map(r=>`<tr><td class="la"><b>${r.seg}</b></td><td class="c">${r.a}</td><td>${r.rule}</td><td class="la">${r.w.slice(0,3).map(MK).join(', ')}</td></tr>`).join('')}</table></div>`},
+  gram:{t:'Gramer kategorileri',h:()=>`<div class="tw"><table class="tbl"><tr><th>Kategori</th><th>Değerler</th></tr><tr><td>Genus (cinsiyet)</td><td>masculinum (m.) · femininum (f.) · neutrum (n.)</td></tr><tr><td>Numerus (sayı)</td><td>singularis (sg.) · pluralis (pl.)</td></tr><tr><td>Casus (hâl)</td><td>Nominativus: özne, kim/ne? · Genitivus: aitlik, “of” · Accusativus: nesne ve Acc. edatları · Ablativus: Abl. edatları</td></tr><tr><td>Declinatio (çekim)</td><td>Gen. sg. ekine göre: -ae → 1. · -i → 2.</td></tr></table></div><p>Söz dizimi: <b>isim + sıfat</b> (<span class="la">musculus rectus</span>), <b>isim + Gen. tamlayan</b> (<span class="la">fractura costae</span>).</p>`},
+  dict:{t:'Sözlük formu',h:()=>`<p>Her isim sözlükte üç parçayla verilir: <b>Nom. sg.</b>, <b>Gen. sg. eki</b>, <b>cinsiyet</b>. Çekimi Gen. sg. belirler.</p><div class="tw"><table class="tbl"><tr><th>Sözlük formu</th><th>Gen. sg.</th><th>Çekim</th><th>Cinsiyet</th></tr><tr><td class="la">costa, ae, f.</td><td class="la">costae</td><td>1.</td><td>f.</td></tr><tr><td class="la">musculus, i, m.</td><td class="la">musculi</td><td>2.</td><td>m.</td></tr><tr><td class="la">ligamentum, i, n.</td><td class="la">ligamenti</td><td>2.</td><td>n.</td></tr><tr><td class="la">radius, ii, m.</td><td class="la">radii</td><td>2.</td><td>m.</td></tr><tr><td class="la">cancer, cri, m.</td><td class="la">cancri</td><td>2.</td><td>m.</td></tr></table></div><p>Sıfatlar üç cinsiyetle verilir: <span class="la">rectus, a, um</span> · <span class="la">dexter, dextra, dextrum</span>.</p>`},
+  gender:{t:'2. çekimde cinsiyet',h:()=>`<p><b>-us</b> ve <b>-er</b> genelde eril, <b>-um</b> nötr. Yunanca kökenli istisnalar <b>dişil</b>:</p><p class="la">methodus, i, f. · periodus, i, f. · diameter, tri, f.</p><p>Bunlara bağlanan sıfat dişil olur: <span class="la">periodus postoperativ<mark>a</mark></span>, <span class="la">diameter transvers<mark>a</mark></span>.</p><p>Sadece çoğul: <span class="la">morbilli, orum, m.</span> (measles).</p>`},
+  d1:{t:'1. çekim: -a, -ae, f.',h:()=>`<p>Hepsi dişil. Gen. sg. ile Nom. pl. aynı görünür (<span class="la">costae</span>). Gen. pl. her zaman <b>-arum</b>.</p>${declTable(['costa','vena'])}`},
+  d2:{t:'2. çekim: -us / -er / -um, -i',h:()=>`<p>-us ve -er eril, -um nötr. Nötrde <b>Nom. = Acc.</b> ve çoğulda <b>-a</b>. Gen. pl. <b>-orum</b>. -er isimlerde çoğu zaman e düşer: cancer → cancri.</p>${declTable(['musculus','cancer','ligamentum'])}`},
+  prep:{t:'Edatlar (praepositiones)',h:()=>{const A=PREP.filter(x=>x[1]==='A'),B=PREP.filter(x=>x[1]==='B');return `<div class="tw"><table class="tbl"><tr><th>+ Accusativus</th><th>+ Ablativus</th></tr>${A.map((a,i)=>`<tr><td><span class="la"><b>${a[0]}</b></span> ${a[2]}</td><td>${B[i]?`<span class="la"><b>${B[i][0]}</b></span> ${B[i][2]}`:''}</td></tr>`).join('')}</table></div><p>Örnek: <span class="la">inter cost<mark>as</mark></span> (Acc. pl.) · <span class="la">sub lingu<mark>a</mark></span> (Abl. sg.) · <span class="la">post cib<mark>um</mark></span> · <span class="la">cum ole<mark>o</mark></span></p>`}},
+  order:{t:'İsim + Genitivus',h:()=>`<p>“X of Y” → ana isim Nom. ile önde, tamlayan arkada ve <b>Gen.</b> hâlinde.</p><div class="tw"><table class="tbl"><tr><th>English</th><th>Latince</th></tr>${[0,9,10,18,22,27].map(i=>GENPH[i]).map(p=>`<tr><td>${p[3]}</td><td class="la">${p[0]} <mark>${forms(NB[p[1]])['G'+p[2]]}</mark></td></tr>`).join('')}</table></div>`},
+  adj:{t:'Sıfatlar: 1. ve 2. çekim',h:()=>`<p>Sıfat ismin <b>cinsiyetine, sayısına ve hâline</b> uyar. m. → -us (2. çekim), f. → -a (1. çekim), n. → -um (2. çekim). Sıfat ismin arkasına gelir.</p>${adjTable('rectus')}<p>-er sıfatlar: <span class="la">dexter, dext<mark>ra</mark>, dext<mark>rum</mark></span> ve <span class="la">sinister, sinistra, sinistrum</span> e'yi düşürür; <span class="la">lactifer, lactifera, lactiferum</span> e'yi korur.</p><p><b>Tuzak:</b> methodus, periodus, diameter dişil: <span class="la">periodus postoperativ<mark>a</mark></span>, <span class="la">diameter obliqu<mark>a</mark></span>.</p>`}
+};
+
+/* ===================== STORAGE / AUDIO ===================== */
+const STORE_KEY='leukocytus.v1';
+let SAVE={best:{},stars:{},bank:[],sound:true};
+try{const s=JSON.parse(localStorage.getItem(STORE_KEY)||'null');if(s)SAVE=Object.assign(SAVE,s)}catch(e){}
+function persist(){try{localStorage.setItem(STORE_KEY,JSON.stringify(SAVE))}catch(e){}}
+function bankAdd(q){if(SAVE.bank.some(b=>b.key===q.key))return;SAVE.bank.unshift({key:q.key,type:q.type,prompt:q.prompt,answer:q.answer,opts:q.opts,explain:q.explain,rule:q.rule});SAVE.bank=SAVE.bank.slice(0,80);persist()}
+function bankDel(k){SAVE.bank=SAVE.bank.filter(b=>b.key!==k);persist()}
+
+let AC=null;
+function ensureAudio(){if(!SAVE.sound)return;try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();if(AC.state==='suspended')AC.resume()}catch(e){}}
+const SFX={pew:[900,500,.06,.02,'square'],ok:[520,1040,.16,.09,'triangle'],bad:[240,80,.32,.1,'sawtooth'],hurt:[160,60,.28,.12,'square'],boss:[90,45,.8,.12,'sawtooth'],win:[392,1175,.6,.09,'triangle'],heal:[660,990,.25,.07,'sine']};
+function sfx(k){if(!SAVE.sound||!AC)return;try{const P=SFX[k],t=AC.currentTime,o=AC.createOscillator(),g=AC.createGain();o.type=P[4];o.frequency.setValueAtTime(P[0],t);o.frequency.exponentialRampToValueAtTime(P[1],t+P[2]);g.gain.setValueAtTime(P[3],t);g.gain.exponentialRampToValueAtTime(.0001,t+P[2]);o.connect(g).connect(AC.destination);o.start(t);o.stop(t+P[2]+.03)}catch(e){}}
+
+/* ===================== STATE ===================== */
+const $=id=>document.getElementById(id);
+const cv=$('cv'),ctx=cv.getContext('2d');
+const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const FONT=(w,s)=>`${w} ${s}px "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif`;
+let W=0,H=0,DPR=1;
+const S={mode:'menu',ch:1,mist:false,qi:0,len:14,score:0,streak:0,hp:5,right:0,answered:0,runMiss:[],requeue:[],recent:[],seen:new Set(),
+  boss:null,q:null,pods:[],bullets:[],parts:[],spores:[],floats:[],beam:null,shake:0,inv:0,cool:0,t:0,qT:0,qDur:10,next:0,after:null,qbB:120,toastT:0};
+const P={x:0,tx:0,y:0,r:24};
+const keys={};
+const rbcs=[];
+
+function bottomY(){return H-($('probe').offsetHeight||0)-60}
+function topY(){return S.boss?S.qbB+122:S.qbB+14}
+function laneX(i,n){const m=Math.min(W,920),l=(W-m)/2;return l+m*(i+.5)/n}
+function laneW(n){return Math.min(W,920)/n-10}
+// phones get a 2×2 grid instead of four thin lanes
+function cols(n){return W<600&&n>2?2:n}
+function slotX(i,n){const c=cols(n);return laneX(i%c,c)}
+function newRbc(any){return {x:R()*W,y:any?R()*H:-40,r:10+R()*18,v:18+R()*30,rot:R()*6.28,vr:(R()-.5)*.6,z:.25+R()*.5}}
+
+function resize(){
+  DPR=Math.min(2,window.devicePixelRatio||1);W=cv.clientWidth;H=cv.clientHeight;
+  cv.width=Math.round(W*DPR);cv.height=Math.round(H*DPR);ctx.setTransform(DPR,0,0,DPR,0,0);
+  P.y=bottomY();if(!P.x)P.x=P.tx=W/2;P.x=Math.min(Math.max(P.x,24),W-24);P.tx=Math.min(Math.max(P.tx,24),W-24);
+  if(!$('qbar').hidden)S.qbB=$('qbar').getBoundingClientRect().bottom;
+  const n=S.pods.length;for(const p of S.pods){p.tx=slotX(p.i,n);p.w=laneW(cols(n));podLayout(p)}
+  const want=Math.round(W*H/60000)+8;while(rbcs.length<want)rbcs.push(newRbc(true));rbcs.length=want;
+}
+
+function wrap(text,maxW){const words=text.split(' ');const lines=[];let cur='';for(const w of words){const t=cur?cur+' '+w:w;if(!cur||ctx.measureText(t).width<=maxW)cur=t;else{lines.push(cur);cur=w}}if(cur)lines.push(cur);return lines}
+function podLayout(p){
+  let fs=W<520?14:16,lines;
+  for(;;fs--){ctx.font=FONT(700,fs);lines=wrap(p.text,p.w-16);if((lines.length<=3&&lines.every(l=>ctx.measureText(l).width<=p.w-16))||fs<=10)break}
+  p.fs=fs;p.lines=lines;ctx.font=FONT(700,fs);
+  p.pw=Math.min(p.w,Math.max(...lines.map(l=>ctx.measureText(l).width))+20);p.ph=lines.length*(fs+4)+12;
+}
+function fire(){if(S.cool>0||S.mode!=='play')return;S.cool=.16;S.bullets.push({x:P.x,y:P.y-P.r});sfx('pew')}
+// homing shot at one pod (tap / click on a pod, keys 1–4)
+function fireAt(p){if(!p||p.dead||p.fade||S.cool>0||S.mode!=='play')return;S.cool=.16;S.bullets.push({x:P.x,y:P.y-P.r,target:p});sfx('pew')}
+function podAt(x,y){
+  for(const p of S.pods){
+    if(p.dead||p.fade)continue;
+    const px=p.x+Math.sin(p.wob)*4,hw=Math.max(p.pw/2,26)+8;
+    if(x>px-hw&&x<px+hw&&y>p.y-36&&y<p.y+22+p.ph+8)return p;
+  }
+  return null;
+}
+function burst(x,y,col,n){for(let i=0;i<n;i++){const a=R()*6.28,v=60+R()*260;S.parts.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:.4+R()*.5,col,r:1.5+R()*3})}}
+function floatTxt(x,y,t,col){S.floats.push({x,y,t,col,life:1})}
+
+/* ===================== UPDATE ===================== */
+function update(dt){
+  S.t+=dt;
+  for(const b of rbcs){b.y+=b.v*dt*(RM?.3:1);b.rot+=b.vr*dt;if(b.y-b.r>H)Object.assign(b,newRbc(false))}
+  if(S.mode!=='play'&&S.mode!=='wait')return;
+
+  if(keys.l)P.tx-=560*dt;if(keys.r)P.tx+=560*dt;
+  P.tx=Math.max(24,Math.min(W-24,P.tx));P.x+=(P.tx-P.x)*Math.min(1,dt*14);
+  S.cool-=dt;S.inv-=dt;S.shake=Math.max(0,S.shake-dt);
+
+  for(const b of S.bullets){
+    const t=b.target;
+    if(t&&!t.dead&&!t.fade){const dx=t.x+Math.sin(t.wob)*4-b.x,dy=t.y+8-b.y,d=Math.hypot(dx,dy)||1,s=Math.min(d,1100*dt);b.a=Math.atan2(dy,dx);b.x+=dx/d*s;b.y+=dy/d*s}
+    else if(t)b.hit=1;
+    else b.y-=900*dt;
+  }
+  S.bullets=S.bullets.filter(b=>b.y>-20&&!b.hit);
+
+  for(const p of S.pods){
+    p.wob+=dt*2;
+    if(p.dead||p.fade){p.ph2+=dt*3;continue}
+    p.x+=(p.tx-p.x)*Math.min(1,dt*5);
+    if(S.mode==='play')p.y=p.y0+p.v*S.qT;
+  }
+  S.pods=S.pods.filter(p=>p.ph2<1);
+
+  if(S.mode==='play'&&S.q&&!S.q.done){
+    S.qT+=dt;
+    outer:for(const b of S.bullets)for(const p of S.pods){
+      if(p.dead||p.fade||(b.target&&b.target!==p))continue;const px=p.x+Math.sin(p.wob)*4;
+      const hit=b.target?Math.hypot(b.x-px,b.y-p.y-8)<14:(b.x>px-p.pw/2-4&&b.x<px+p.pw/2+4&&b.y>p.y-26&&b.y<p.y+22+p.ph);
+      if(hit){b.hit=1;hitPod(p);break outer}
+    }
+    if(S.q&&!S.q.done&&S.qT>=S.qDur)hitPod(null);
+    $('timerFill').style.transform=`scaleX(${Math.max(0,1-S.qT/S.qDur)})`;
+  }
+
+  if(S.boss){
+    const B=S.boss;B.t+=dt;B.hit=Math.max(0,B.hit-dt);
+    B.y=S.qbB+82;B.x=W/2+Math.sin(B.t*.7)*Math.min(W*.32,300);
+    if(S.mode==='play'&&S.q&&!S.q.done){B.fire-=dt;if(B.fire<=0){
+      B.fire=Math.max(.9,1.9-(B.max-B.hp)*.13);
+      const a=Math.atan2(P.y-B.y,P.x-B.x),v=165+(B.max-B.hp)*12;
+      S.spores.push({x:B.x,y:B.y+30,vx:Math.cos(a)*v,vy:Math.sin(a)*v});
+    }}
+  }
+  for(const s of S.spores){
+    s.x+=s.vx*dt;s.y+=s.vy*dt;
+    if(S.mode==='play'&&S.inv<=0&&Math.hypot(s.x-P.x,s.y-P.y)<P.r+7){
+      s.dead=1;hurt();sfx('hurt');burst(P.x,P.y,'#ff5d52',RM?6:14);
+      if(S.hp<=0){if(S.q)S.q.done=true;wait(.9,()=>endRun(false))}
+    }
+  }
+  S.spores=S.spores.filter(s=>!s.dead&&s.y<H+20&&s.x>-20&&s.x<W+20);
+
+  for(const p of S.parts){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=.96;p.vy*=.96;p.life-=dt}
+  S.parts=S.parts.filter(p=>p.life>0);
+  for(const f of S.floats){f.y-=40*dt;f.life-=dt}
+  S.floats=S.floats.filter(f=>f.life>0);
+  if(S.beam)S.beam.t-=dt;
+  if(S.toastT>0){S.toastT-=dt;if(S.toastT<=0)$('toast').hidden=true}
+
+  if(S.mode==='wait'){S.next-=dt;if(S.next<=0){const f=S.after;S.after=null;S.mode='play';f&&f()}}
+}
+function wait(sec,fn){S.mode='wait';S.next=sec;S.after=fn}
+
+/* ===================== DRAW ===================== */
+const POD_COL=['#9fd36a','#6fcfb8','#d9b65c'];
+function rr(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath()}
+function drawRbc(b){ctx.save();ctx.translate(b.x,b.y);ctx.rotate(b.rot);ctx.scale(1,.55+.35*Math.abs(Math.sin(b.rot*.5)));ctx.globalAlpha=b.z*.5;ctx.fillStyle='#b3263f';ctx.beginPath();ctx.arc(0,0,b.r,0,6.28);ctx.fill();ctx.fillStyle='#7d1529';ctx.beginPath();ctx.arc(0,0,b.r*.5,0,6.28);ctx.fill();ctx.restore()}
+function drawPlayer(){
+  if(S.inv>0&&Math.floor(S.inv*12)%2)return;
+  const r=P.r,t=S.t;ctx.save();ctx.translate(P.x,P.y);
+  const gl=ctx.createRadialGradient(0,0,r*.4,0,0,r*1.9);gl.addColorStop(0,'rgba(245,236,231,.22)');gl.addColorStop(1,'rgba(245,236,231,0)');
+  ctx.fillStyle=gl;ctx.beginPath();ctx.arc(0,0,r*1.9,0,6.28);ctx.fill();
+  ctx.beginPath();for(let i=0;i<=28;i++){const a=i/28*6.28,q=r+Math.sin(a*5+t*3)*1.6;ctx.lineTo(Math.cos(a)*q,Math.sin(a)*q)}ctx.closePath();
+  ctx.fillStyle='#efe1dc';ctx.fill();ctx.strokeStyle='rgba(255,122,162,.65)';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.fillStyle='rgba(255,122,162,.6)';for(let i=0;i<8;i++){const a=i*.8+t*.3;ctx.beginPath();ctx.arc(Math.cos(a)*r*.72,Math.sin(a)*r*.72,1.7,0,6.28);ctx.fill()}
+  ctx.fillStyle='#6b5ce0';[[-8,1,7],[0,-5,7.5],[8,1,7]].forEach(([a,b,c])=>{ctx.beginPath();ctx.arc(a,b,c,0,6.28);ctx.fill()});
+  ctx.fillStyle='rgba(255,255,255,.2)';ctx.beginPath();ctx.arc(-2,-8,3,0,6.28);ctx.fill();
+  ctx.restore();
+}
+function drawGerm(k,col,t){
+  ctx.fillStyle=col;ctx.strokeStyle=col;
+  if(k===0){[[-7,4],[7,4],[0,-7],[0,5]].forEach(([a,b])=>{ctx.beginPath();ctx.arc(a,b,8,0,6.28);ctx.fill()});ctx.fillStyle='rgba(0,0,0,.2)';ctx.beginPath();ctx.arc(-2,0,3,0,6.28);ctx.fill()}
+  else if(k===1){ctx.lineWidth=1.5;for(let i=-1;i<=1;i++){ctx.beginPath();ctx.moveTo(14,i*4);for(let j=1;j<=6;j++)ctx.lineTo(14+j*3,i*4+Math.sin(t*6+j+i)*3);ctx.stroke()}rr(-16,-8,32,16,8);ctx.fill();ctx.fillStyle='rgba(0,0,0,.18)';rr(-10,-3,20,6,3);ctx.fill()}
+  else{ctx.lineWidth=2;for(let i=0;i<10;i++){const a=i/10*6.28+t*.4;ctx.beginPath();ctx.moveTo(Math.cos(a)*10,Math.sin(a)*10);ctx.lineTo(Math.cos(a)*16,Math.sin(a)*16);ctx.stroke();ctx.beginPath();ctx.arc(Math.cos(a)*17,Math.sin(a)*17,2.2,0,6.28);ctx.fill()}ctx.beginPath();ctx.arc(0,0,11,0,6.28);ctx.fill();ctx.fillStyle='rgba(0,0,0,.2)';ctx.beginPath();ctx.arc(2,2,4,0,6.28);ctx.fill()}
+  ctx.lineWidth=1;
+}
+function drawPod(p){
+  const a=1-p.ph2;if(a<=0)return;
+  ctx.save();ctx.globalAlpha=a;ctx.translate(p.x+Math.sin(p.wob)*4,p.y);
+  if(p.dead){const s=1+p.ph2*.6;ctx.scale(s,s)}
+  drawGerm(p.shape,p.flash?p.flash:POD_COL[p.shape],S.t+p.i);
+  ctx.font='700 11px "JetBrains Mono", monospace';ctx.textAlign='center';ctx.fillStyle='rgba(245,236,231,.5)';ctx.fillText(String(p.i+1),0,-25);
+  const top=22;ctx.fillStyle='rgba(20,10,14,.92)';rr(-p.pw/2,top,p.pw,p.ph,8);ctx.fill();
+  ctx.strokeStyle=p.flash||'rgba(245,236,231,.24)';ctx.lineWidth=p.flash?2:1;ctx.stroke();
+  ctx.fillStyle='#f5ece7';ctx.font=FONT(700,p.fs);ctx.textBaseline='top';
+  p.lines.forEach((l,i)=>ctx.fillText(l,0,top+7+i*(p.fs+4)));
+  ctx.restore();ctx.textBaseline='alphabetic';
+}
+function drawBoss(B){
+  ctx.save();ctx.translate(B.x,B.y);const t=B.t,R0=38+(B.hit>0?6:0);
+  ctx.strokeStyle='#c23a52';ctx.lineWidth=3;
+  for(let i=0;i<14;i++){const a=i/14*6.28+t*.2;ctx.beginPath();ctx.moveTo(Math.cos(a)*(R0+2),Math.sin(a)*(R0+2));ctx.lineTo(Math.cos(a)*(R0+14),Math.sin(a)*(R0+14));ctx.stroke()}
+  ctx.fillStyle=B.hit>0?'#ffd27a':'#c23a52';ctx.beginPath();
+  for(let i=0;i<=40;i++){const a=i/40*6.28,r=R0+Math.sin(a*7+t*2)*5+Math.sin(a*3-t)*4;ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r)}ctx.closePath();ctx.fill();
+  ctx.fillStyle='#3a0d18';ctx.beginPath();ctx.arc(0,0,16,0,6.28);ctx.fill();
+  ctx.fillStyle='#ff5d52';ctx.beginPath();ctx.arc(Math.sin(t)*4,Math.cos(t*.8)*3,6,0,6.28);ctx.fill();
+  ctx.restore();ctx.lineWidth=1;
+}
+function draw(){
+  ctx.save();
+  ctx.fillStyle='#140a0e';ctx.fillRect(0,0,W,H);
+  const g=ctx.createLinearGradient(0,0,W,0);g.addColorStop(0,'rgba(130,22,44,.38)');g.addColorStop(.14,'rgba(60,10,22,0)');g.addColorStop(.86,'rgba(60,10,22,0)');g.addColorStop(1,'rgba(130,22,44,.38)');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  for(const b of rbcs)drawRbc(b);
+  if(S.mode!=='menu'){
+    if(S.shake>0)ctx.translate((R()-.5)*16*S.shake,(R()-.5)*16*S.shake);
+    if(S.mode==='play'&&S.pods.length){ctx.strokeStyle='rgba(245,236,231,.05)';ctx.setLineDash([4,10]);const c=cols(S.pods.length);for(let i=0;i<c;i++){const x=laneX(i,c);ctx.beginPath();ctx.moveTo(x,topY());ctx.lineTo(x,P.y-30);ctx.stroke()}ctx.setLineDash([])}
+    if(S.boss)drawBoss(S.boss);
+    if(S.beam&&S.beam.t>0&&S.boss){ctx.strokeStyle=`rgba(168,228,111,${S.beam.t*2.5})`;ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(S.beam.x,S.beam.y);ctx.lineTo(S.boss.x,S.boss.y);ctx.stroke();ctx.lineWidth=1}
+    for(const p of S.pods)drawPod(p);
+    for(const s of S.spores){ctx.fillStyle='rgba(255,93,82,.3)';ctx.beginPath();ctx.arc(s.x,s.y,11,0,6.28);ctx.fill();ctx.fillStyle='#ff5d52';ctx.beginPath();ctx.arc(s.x,s.y,6,0,6.28);ctx.fill()}
+    for(const b of S.bullets){ctx.save();ctx.translate(b.x,b.y);ctx.rotate((b.a===undefined?-Math.PI/2:b.a)+Math.PI/2);ctx.fillStyle='rgba(255,122,162,.25)';ctx.beginPath();ctx.ellipse(0,10,2,10,0,0,6.28);ctx.fill();ctx.fillStyle='#ff7aa2';ctx.beginPath();ctx.ellipse(0,0,3,8,0,0,6.28);ctx.fill();ctx.restore()}
+    drawPlayer();
+    for(const p of S.parts){ctx.globalAlpha=Math.max(0,Math.min(1,p.life*1.6));ctx.fillStyle=p.col;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,6.28);ctx.fill()}
+    ctx.textAlign='center';ctx.font='700 18px "JetBrains Mono", monospace';
+    for(const f of S.floats){ctx.globalAlpha=Math.min(1,f.life*1.5);ctx.fillStyle=f.col;ctx.fillText(f.t,f.x,f.y)}
+    ctx.globalAlpha=1;
+  }
+  ctx.restore();
+}
+let last=0;
+function frame(ts){const dt=Math.min(.05,(ts-last)/1000||0);last=ts;update(dt);draw();requestAnimationFrame(frame)}
+
+/* ===================== FLOW ===================== */
+const TYPE_LBL={pron:'telaffuz',gram:'gramer kategorileri',dict:'sözlük formu',gender:'cinsiyet',voc:'kelime',case:'hâl ekleri',caseRev:'hâl tanıma',prep:'edatlar',prepPh:'edat + hâl',agree:'isim + sıfat',agreeCase:'isim + sıfat çekimi',gen:'İngilizce → Latince',genLE:'Latince → İngilizce',phr:'İngilizce → Latince',phrLE:'Latince → İngilizce'};
+const OVS=['menu','rule','fb','pause','end','codex'];
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function show(id){OVS.forEach(o=>$(o).hidden=o!==id)}
+function hideOv(){OVS.forEach(o=>$(o).hidden=true)}
+function toast(html,sec){const t=$('toast');t.innerHTML=html;t.hidden=false;S.toastT=sec}
+function hud(){
+  $('hearts').innerHTML=Array.from({length:5},(_,i)=>i<S.hp?'♥':'<span class="off">♥</span>').join('');
+  $('hudScore').textContent=S.score;
+  $('hudStreak').textContent='seri '+S.streak+(S.streak>=5?' · ×'+(1+Math.floor(S.streak/5)*.5):'');
+  $('hudCh').textContent=S.mist?'HATALAR':CHAPTERS[S.ch].name.toUpperCase();
+}
+function progress(){$('qprog').textContent=S.boss?`${S.boss.name} ${S.boss.hp}/${S.boss.max}`:`${Math.min(S.qi,S.len)}/${S.len}`}
+function renderQ(q){
+  $('qbar').hidden=false;
+  $('qtype').textContent=(q.again?'tekrar · ':'')+(TYPE_LBL[q.type]||q.type);
+  $('qtext').innerHTML=q.prompt;
+  $('timerFill').style.transform='scaleX(1)';
+  progress();
+  S.qbB=$('qbar').getBoundingClientRect().bottom;
+  if(S.boss)$('bossbar').style.top=(S.qbB+8)+'px';
+}
+function spawnPods(q){
+  S.q=q;q.done=false;renderQ(q);
+  const n=q.opts.length,c=cols(n),rows=Math.ceil(n/c),y0=topY()+24;
+  S.pods=q.opts.map((t,i)=>{const p={i,row:Math.floor(i/c),text:t,ok:t===q.answer,x:S.boss?S.boss.x:slotX(i,n),tx:slotX(i,n),y0,y:y0,w:laneW(c),shape:(i+S.qi)%3,wob:R()*6.28,ph2:0,dead:0,fade:0,flash:null};podLayout(p);return p});
+  const maxPh=Math.max(...S.pods.map(p=>p.ph)),rowH=maxPh+62;
+  S.pods.forEach(p=>{p.y0=p.y=y0+p.row*rowH});
+  const chars=Math.max(...q.opts.map(o=>o.length))+q.prompt.replace(/<[^>]+>/g,'').length*.4;
+  const base=S.boss?8.5:Math.max(6.5,11-S.streak*.25);
+  S.qDur=base+Math.min(5,chars*.05);S.qT=0;
+  const dist=Math.max(80,P.y-P.r-8-(y0+(rows-1)*rowH)-22-maxPh);
+  S.pods.forEach(p=>p.v=dist/S.qDur);
+  S.mode='play';
+}
+function hurt(){S.hp=Math.max(0,S.hp-1);S.shake=RM?0:.35;S.inv=1.2;hud();try{navigator.vibrate&&navigator.vibrate(70)}catch(e){}}
+function record(q){
+  if(!S.runMiss.some(m=>m.key===q.key))S.runMiss.push(q);
+  if(!S.mist)bankAdd(q);
+  S.requeue.push({q:Object.assign({},q,{opts:shuffle(q.opts),again:true}),due:S.qi+3});
+}
+function hitPod(p){
+  const q=S.q;if(!q||q.done)return;q.done=true;S.answered++;
+  const others=S.pods.filter(o=>o!==p);
+  if(p&&p.ok){
+    S.right++;S.streak++;
+    const mult=1+Math.floor(S.streak/5)*.5,pts=Math.round((100+Math.max(0,1-S.qT/S.qDur)*60)*mult);
+    S.score+=pts;p.dead=1;others.forEach(o=>o.fade=1);
+    burst(p.x,p.y,'#a8e46f',RM?8:26);floatTxt(p.x,p.y-30,'+'+pts,'#a8e46f');sfx('ok');
+    if(S.mist)bankDel(q.key);
+    if(S.boss){S.boss.hp--;S.boss.hit=.5;S.beam={x:p.x,y:p.y,t:.35};burst(S.boss.x,S.boss.y,'#ff5d52',RM?8:30);updBoss()}
+    if(S.streak%8===0&&S.hp<5){S.hp++;sfx('heal');toast('<b>Membran onarıldı</b> · +1 can',1.6)}
+    else toast(`<b>✓</b> <span class="la">${esc(q.answer)}</span>`,1.1);
+    hud();wait(.6,nextQ);
+  }else{
+    S.streak=0;hurt();sfx('bad');
+    if(p){p.dead=1;burst(p.x,p.y,'#ff5d52',RM?8:22)}
+    others.forEach(o=>{if(o.ok)o.flash='#a8e46f';else o.fade=1});
+    record(q);showFb(q,p?p.text:null);
+  }
+}
+function showFb(q,picked){
+  S.mode='fb';
+  $('fbHead').textContent=picked?'Yanlış patojen · −1 can':'Doğru patojeni kaçırdın · −1 can';
+  $('fbQ').innerHTML=q.prompt;$('fbAns').textContent=q.answer;
+  $('fbYouRow').hidden=!picked;$('fbYou').textContent=picked||'';
+  $('fbExp').innerHTML=q.explain+(S.hp>0?'<div class="mini">Bu soru birkaç soru sonra tekrar gelecek.</div>':'');
+  show('fb');$('fbGo').focus({preventScroll:true});
+}
+function fbGo(){if(S.mode!=='fb')return;hideOv();S.pods.forEach(p=>p.fade=1);if(S.hp<=0)return endRun(false);wait(.25,nextQ)}
+function showRule(id,cb){const r=RULES[id];$('ruleTitle').textContent=r.t;$('ruleBody').innerHTML=r.h();S.mode='rule';S.ruleCb=cb;show('rule');$('ruleGo').focus({preventScroll:true})}
+function ruleGo(){if(S.mode!=='rule')return;hideOv();const cb=S.ruleCb;S.ruleCb=null;S.mode='wait';S.next=1e9;cb&&cb()}
+
+function nextQ(){
+  if(S.hp<=0)return endRun(false);
+  if(S.boss&&S.boss.hp<=0)return bossDown();
+  if(!S.boss&&!S.mist&&S.qi>=S.len)return startBoss();
+  let q=null;
+  const d=S.requeue.findIndex(r=>r.due<=S.qi);
+  if(d>=0)q=S.requeue.splice(d,1)[0].q;
+  else if(S.mist){
+    const b=S.mistList.shift();
+    if(b)q=Object.assign({},b,{opts:shuffle(b.opts)});
+    else if(S.requeue.length)q=S.requeue.shift().q;
+    else return endRun(true);
+  }else{
+    for(let t=0;t<8;t++){q=genFor(S.ch);if(!S.recent.includes(q.key))break}
+    S.recent.push(q.key);if(S.recent.length>10)S.recent.shift();
+  }
+  S.qi++;
+  if(q.rule&&!S.mist&&!S.seen.has(q.rule)){S.seen.add(q.rule);return showRule(q.rule,()=>spawnPods(q))}
+  spawnPods(q);
+}
+function startBoss(){
+  const c=CHAPTERS[S.ch],hp=S.ch===5?8:6;
+  S.boss={name:c.boss,hp,max:hp,x:W/2,y:S.qbB+82,t:0,fire:2.4,hit:0};
+  $('qbar').hidden=false;$('qtype').textContent='boss';
+  $('qtext').innerHTML=`${LA(c.boss)} damarda<small>Her doğru cevap ona hasar verir. Kırmızı sporlardan kaç: fare ya da ← →.</small>`;
+  $('timerFill').style.transform='scaleX(1)';S.qbB=$('qbar').getBoundingClientRect().bottom;
+  $('bossName').textContent=c.boss.toUpperCase();$('bossbar').hidden=false;$('bossbar').style.top=(S.qbB+8)+'px';updBoss();
+  sfx('boss');wait(2.4,nextQ);
+}
+function updBoss(){const B=S.boss;if(!B)return;$('bossFill').style.width=(B.hp/B.max*100)+'%';progress()}
+function bossDown(){const B=S.boss;burst(B.x,B.y,'#ffd27a',RM?20:80);burst(B.x,B.y,'#ff5d52',RM?10:50);S.spores=[];B.hit=2;sfx('win');wait(1.3,()=>endRun(true))}
+
+function startRun(ch,mist){
+  if(mist&&!SAVE.bank.length)return;
+  Object.assign(S,{ch,mist:!!mist,qi:0,score:0,streak:0,hp:5,right:0,answered:0,runMiss:[],requeue:[],recent:[],seen:new Set(),boss:null,q:null,pods:[],bullets:[],parts:[],spores:[],floats:[],beam:null,shake:0,inv:0});
+  if(mist){S.mistList=shuffle(SAVE.bank.map(b=>Object.assign({},b)));S.len=S.mistList.length}else S.len=CHAPTERS[ch].len;
+  hideOv();$('bossbar').hidden=true;$('qbar').hidden=true;$('toast').hidden=true;$('hud').hidden=false;hud();
+  P.x=P.tx=W/2;ensureAudio();wait(.35,nextQ);
+}
+function endRun(win){
+  S.mode='end';
+  const acc=S.answered?Math.round(S.right/S.answered*100):0;
+  const stars=!win?0:acc>=90?3:acc>=75?2:1;
+  const c=CHAPTERS[S.ch];
+  if(!S.mist){if(S.score>(SAVE.best[S.ch]||0))SAVE.best[S.ch]=S.score;if(stars>(SAVE.stars[S.ch]||0))SAVE.stars[S.ch]=stars;persist()}
+  $('endEye').textContent=S.mist?'Hata tekrarı':`${c.name} · ${c.topic}`;
+  $('endEye').className='eyebrow '+(win?'good':'bad');
+  $('endTitle').textContent=win?(S.mist?'Hata bankası temizlendi':`Victoria: ${c.boss} yenildi`):'Lysis: hücre zarı çöktü';
+  $('endStars').textContent=S.mist?'':'★'.repeat(stars)+'☆'.repeat(3-stars);
+  $('stScore').textContent=S.score;$('stAcc').textContent=acc+'%';$('stBest').textContent=S.mist?'—':(SAVE.best[S.ch]||0);
+  $('endMissWrap').hidden=!S.runMiss.length;
+  $('endMiss').innerHTML=S.runMiss.map(q=>`<div class="miss"><span>${q.prompt}</span><span class="a la">${esc(q.answer)}</span></div>`).join('');
+  $('eMist').disabled=!SAVE.bank.length;$('eMist').textContent=`Hatalarımı çalış (${SAVE.bank.length})`;
+  S.boss=null;S.pods=[];S.spores=[];S.bullets=[];
+  $('qbar').hidden=true;$('bossbar').hidden=true;$('hud').hidden=true;$('toast').hidden=true;
+  show('end');$('eAgain').focus({preventScroll:true});
+  if(!win)sfx('bad');
+}
+function buildMenu(){
+  $('chapters').innerHTML=[1,2,3,4,5].map(k=>{const c=CHAPTERS[k],st=SAVE.stars[k]||0;
+    return `<button class="chap${k===5?' exam':''}" data-ch="${k}"><span class="num">${c.n}</span><span class="t">${c.name}</span><span class="d">${c.topic}</span><span class="b">${SAVE.best[k]?'en iyi '+SAVE.best[k]+' · ':''}${'★'.repeat(st)}${'☆'.repeat(3-st)}</span></button>`}).join('');
+  $('btnMistakes').textContent=`Hatalarım (${SAVE.bank.length})`;$('btnMistakes').disabled=!SAVE.bank.length;
+  $('btnSound').textContent='Ses: '+(SAVE.sound?'açık':'kapalı');
+}
+function toMenu(){
+  S.mode='menu';S.boss=null;S.pods=[];S.spores=[];S.bullets=[];
+  $('qbar').hidden=true;$('hud').hidden=true;$('bossbar').hidden=true;$('toast').hidden=true;
+  buildMenu();show('menu');
+}
+function pause(){if(S.mode!=='play'&&S.mode!=='wait')return;S.prev=S.mode;S.mode='pause';show('pause');$('pResume').focus({preventScroll:true})}
+function resume(){if(S.mode!=='pause')return;hideOv();S.mode=S.prev||'play'}
+
+/* ===================== CODEX ===================== */
+const CODEX=[['Caput I',['pron','gram','dict']],['Caput II',['d1','prep','order','adj']],['Caput III',['d2','gender']],['Caput IV',['adj']],['Lexicon',null]];
+function lexicon(){
+  const sec=(t,items)=>`<section><h3>${t}</h3><div class="lex">${items.map(x=>`<div><span class="la">${x.dict}</span> <span>${x.en}</span></div>`).join('')}</div></section>`;
+  return sec('Caput II · isimler (1. çekim)',N1.concat(P1))+sec('Caput II · sıra sayıları ve sıfatlar',A2)+sec('Caput II · edatlar',PREP.map(p=>({dict:p[0]+' + '+(p[1]==='A'?'Acc.':'Abl.'),en:p[2]})))+sec('Caput III · isimler (2. çekim)',N2.concat(P2))+sec('Caput IV · sıfatlar',A4);
+}
+function codexTab(i){
+  $('codexTabs').innerHTML=CODEX.map((c,j)=>`<button class="tab" role="tab" aria-selected="${j===i}" data-i="${j}">${c[0]}</button>`).join('');
+  const ids=CODEX[i][1];
+  $('codexBody').innerHTML=ids?ids.map(id=>`<section><h3>${RULES[id].t}</h3><div class="rulebody">${RULES[id].h()}</div></section>`).join(''):lexicon();
+  $('codexBody').parentElement.scrollTop=0;
+}
+function openCodex(){S.codexBack=S.mode==='pause'?'pause':'menu';show('codex');codexTab(0)}
+function closeCodex(){show(S.codexBack==='pause'?'pause':'menu')}
+
+/* ===================== INPUT / BOOT ===================== */
+// tap/click on a pod = homing shot; mouse elsewhere = straight shot; touch elsewhere = move/drag the cell
+let dragging=false;
+cv.addEventListener('pointermove',e=>{
+  if(e.pointerType==='mouse')P.tx=e.clientX;
+  else if(dragging&&e.buttons)P.tx=e.clientX;
+});
+cv.addEventListener('pointerdown',e=>{
+  ensureAudio();dragging=false;
+  const p=podAt(e.clientX,e.clientY);
+  if(p)return fireAt(p);
+  P.tx=e.clientX;
+  if(e.pointerType==='mouse')fire();else dragging=true;
+});
+addEventListener('pointerup',()=>{dragging=false});
+addEventListener('keydown',e=>{
+  const k=e.key;
+  if(S.mode==='rule'&&(k===' '||k==='Enter')){e.preventDefault();ruleGo();return}
+  if(S.mode==='fb'&&(k===' '||k==='Enter')){e.preventDefault();fbGo();return}
+  if(S.mode==='pause'&&(k==='p'||k==='P'||k==='Escape')){e.preventDefault();resume();return}
+  if(S.mode!=='play'&&S.mode!=='wait')return;
+  if(k==='ArrowLeft'||k==='a'||k==='A')keys.l=1;
+  else if(k==='ArrowRight'||k==='d'||k==='D')keys.r=1;
+  else if(k===' '||k==='ArrowUp'||k==='w'||k==='W'){e.preventDefault();fire()}
+  else if(/^[1-4]$/.test(k))fireAt(S.pods.find(p=>p.i===+k-1));
+  else if(k==='p'||k==='P'||k==='Escape')pause();
+});
+addEventListener('keyup',e=>{const k=e.key;if(k==='ArrowLeft'||k==='a'||k==='A')keys.l=0;if(k==='ArrowRight'||k==='d'||k==='D')keys.r=0});
+addEventListener('blur',()=>{keys.l=keys.r=0});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)pause()});
+addEventListener('resize',resize);
+
+$('chapters').addEventListener('click',e=>{const b=e.target.closest('.chap');if(b)startRun(+b.dataset.ch)});
+$('btnMistakes').onclick=()=>startRun(5,true);
+$('btnCodex').onclick=openCodex;$('pCodex').onclick=openCodex;$('codexClose').onclick=closeCodex;
+$('codexTabs').addEventListener('click',e=>{const b=e.target.closest('.tab');if(b)codexTab(+b.dataset.i)});
+$('btnSound').onclick=()=>{SAVE.sound=!SAVE.sound;persist();if(SAVE.sound)ensureAudio();buildMenu()};
+$('btnPause').onclick=pause;$('pResume').onclick=resume;$('pMenu').onclick=toMenu;
+$('ruleGo').onclick=ruleGo;$('fbGo').onclick=fbGo;
+$('eAgain').onclick=()=>startRun(S.ch,S.mist);$('eMist').onclick=()=>startRun(S.ch,true);$('eMenu').onclick=toMenu;
+
+resize();buildMenu();requestAnimationFrame(frame);
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(resize);
+</script>
+</body>
+</html>
